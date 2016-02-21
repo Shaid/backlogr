@@ -1,0 +1,40 @@
+{
+  "name": "backlogr",
+  "version": "0.1.0",
+  "description": "What's in your backlog?",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shaid/backlogr.git"
+  },
+  "author": "Jez Templeton",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Shaid/backlogr/issues"
+  },
+  "homepage": "https://github.com/Shaid/backlogr#readme",
+  "scripts": {
+    "build": "universal-redux-build",
+    "start": "NODE_ENV=production NODE_PATH=./src universal-redux-server",
+    "dev-server": "NODE_PATH=./src universal-redux-server",
+    "dev": "concurrent --kill-others \"npm run watch-client\" \"npm run dev-server\"",
+    "watch-client": "universal-redux-watch"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "universal-redux": "3.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "1.0.0",
+    "moment": "^2.11.2",
+    "node-neat": "^1.7.2",
+    "normalize.css": "^3.0.3",
+    "react": "^0.14.6",
+    "react-dom": "^0.14.6",
+    "react-redux": "4.3.0",
+    "react-router": "2.0.0",
+    "react-router-redux": "3.0.0",
+    "react-tap-event-plugin": "^0.2.2",
+    "superagent": "^1.7.2"
+  }
+}
