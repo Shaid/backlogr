@@ -1,0 +1,57 @@
+@import 'normalize.css/normalize.css';
+
+@import 'bourbon';
+
+$max-width: 100% !global;
+
+@import 'neat';
+
+@import url(https://fonts.googleapis.com/css?family=Open+Sans:400,300,400italic,300italic,700,700italic);
+@import url(https://fonts.googleapis.com/icon?family=Material+Icons);
+@import './variables.scss';
+
+html {
+  font-size: $font-large;
+  font-family: 'Open Sans', sans-serif;
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  touch-action: manipulation;
+}
+
+a {
+  text-decoration: none;
+}
+
+// positioning
+.left {
+  float: left;
+}
+
+.right {
+  float: right;
+}
+
+.clear {
+  clear: both;
+}
+
+// typography
+
+.centre {
+  text-align: center;
+}
+
+.bold {
+  font-weight: bold;
+}
+
+.light {
+  font-weight: 300;
+}
+
+.italic {
+  font-style: italic;
+}

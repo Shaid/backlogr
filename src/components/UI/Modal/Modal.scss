@@ -1,0 +1,102 @@
+@import "../../../theme/base.scss";
+
+.modalWrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.7);
+  z-index: 20000;
+}
+
+.hide {
+  display: none;
+}
+
+.show {
+  display: block;
+}
+
+.modal {
+  background-color: $palette-white;
+  position: fixed;
+  border: 1px solid $palette-black;
+  border-radius: 4px;
+  margin: 60px 15px;
+  left: 0;
+  right: 0;
+}
+
+.close {
+  position: fixed;
+  top: 60px;
+  right: 15px;
+  padding: 15px;
+  color: $palette-grey-light;
+  div {
+    font-size: 32px !important;
+  }
+}
+
+.day {
+  color: $palette-blue;
+  font-weight: bold;
+}
+
+.precis {
+  font-weight: bold;
+
+}
+
+.content {
+  font-size: $font-normal;
+  margin: 20px;
+  min-height: 200px;
+  min-width: 90%;
+}
+
+.forecast {
+  font-size: $font-small;
+  margin-top: 20px;
+}
+
+.previous {
+  font-size: 14px;
+  text-transform: uppercase;
+  width: 50%;
+  border: 1px solid $palette-grey-light;
+  padding: 10px 10px;
+  margin: 0;
+  float: left;
+  border-bottom-left-radius: 4px;
+  span {
+    position: relative;
+    top: -5px;
+    padding-left: 10px;
+  }
+}
+
+.next {
+  @extend .previous;
+  float: right;
+  text-align: right;
+  border-left: none;
+  border-bottom-right-radius: 4px;
+  span {
+    padding-left: 0;
+    padding-right: 10px;
+  }
+}
+
+.inactive {
+  color: $palette-grey-light;
+}
+
+.chevron {
+  font-size: 24px;
+  position: relative;
+  top: 2px;
+}

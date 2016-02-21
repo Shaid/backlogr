@@ -1,0 +1,26 @@
+@import '../../../../theme/base.scss';
+
+.location {
+  font-size: $font-normal;
+  border-bottom: 2px solid $palette-white;
+  padding: 15px;
+  color: $palette-black;
+  background-color: $palette-grey-pale;
+  width: 100%;
+  font-weight: bold;
+  &:last-child {
+    border-bottom: 2px solid $palette-grey-blue;
+  }
+}
+
+.label {
+  margin-right: 90px;
+}
+
+.chevron {
+  font-size: 32px !important;
+  position: absolute;
+  padding: 0 15px;
+  margin-top: -4px;
+  right: 70px;
+}

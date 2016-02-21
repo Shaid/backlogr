@@ -1,0 +1,32 @@
+@import "../../../theme/base.scss";
+
+.footer {
+  @include outer-container();
+  background-color: $theme-footer-background;
+  height: em(50);
+  border-top: 1px solid $palette-grey-dark;
+}
+
+.content {
+  @include span-columns(12);
+  text-align: center;
+}
+
+.crest {
+  display: inline;
+  position: relative;
+  top: em(10);
+  img {
+    width: em(37);
+    height: em(27);
+  }
+}
+
+.brand {
+  display: inline;
+  //@include span-columns(5 of 12);
+  color: $theme-text-colour;
+  font-size: em(11);
+  padding: em(11);
+  padding-right: em(0);
+}

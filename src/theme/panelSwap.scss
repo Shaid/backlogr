@@ -1,0 +1,12 @@
+.swap {
+  color: $palette-blue;
+  @include span-columns(3);
+  float: right;
+  font-size: $font-small;
+}
+
+.swap_icon {
+    position: relative;
+    top: 7px;
+    margin-right: 0px;
+}

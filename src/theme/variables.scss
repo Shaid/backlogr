@@ -1,0 +1,36 @@
+/**
+ *  Define scss variables here.
+ *
+ *  Available options for Bootstrap:
+ *  http://getbootstrap.com/customize/
+ *
+ */
+
+// Palette
+$palette-black: #000000;
+$palette-blue: #0066cc;
+$palette-blue-light: #0099ff;
+$palette-blue-dark: #2c3e50;
+$palette-blue-medium: #34495e;
+$palette-grey: #666666;
+$palette-grey-pale: #ecf0f1;
+$palette-grey-light: #c9c9c9;
+$palette-grey-dark: #333333;
+$palette-grey-blue: #b5c1ce;
+
+$palette-yellow: #ffc106;
+$palette-cream: #f0eeeb;
+$palette-white: #ffffff;
+$palette-puce: #722f37;
+
+$font-normal: 16px;
+$font-small: 14px;
+$font-large: 18px;
+$font-icon-normal: 24px;
+$font-icon-large: 24px;
+
+// theme colours
+$theme-text-colour: $palette-grey-dark;
+$theme-background: $palette-grey-pale;
+$theme-menu-bar: $palette-blue-dark;
+$theme-footer-background: $palette-cream;

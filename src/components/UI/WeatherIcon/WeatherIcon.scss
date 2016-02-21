@@ -1,0 +1,12 @@
+@import "../../../theme/base.scss";
+
+.weatherIcon {
+  color: $palette-grey;
+  font-weight: 300;
+}
+
+.weatherIconNoIcon {
+  @extend .weatherIcon;
+  color: $palette-grey-light;
+
+}

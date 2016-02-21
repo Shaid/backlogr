@@ -1,0 +1,31 @@
+@import '../../../../theme/base.scss';
+
+.result {
+  font-size: $font-normal;
+  border-bottom: 1px solid $palette-grey-blue;
+  padding: 15px;
+  color: $palette-black;
+  background-color: $palette-grey-pale;
+  width: 100%;
+
+}
+
+.label {
+  // margin: 0 90px 0 70px;
+
+}
+
+.delete {
+  font-size: 32px !important;
+  position: absolute;
+  padding: 3px 15px;
+  border-right: 2px solid $palette-grey-pale;
+}
+
+.chevron {
+  @extend .delete;
+  right: 70px;
+  margin-top: -8px;
+  border-right: none;
+  color: $palette-grey;
+}

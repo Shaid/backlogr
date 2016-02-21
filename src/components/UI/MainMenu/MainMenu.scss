@@ -1,0 +1,167 @@
+@import "../../../theme/base.scss";
+
+.mainMenu {
+  @include span-columns(12);
+  width: 100%;
+  height: 100%;
+  z-index: 11000;
+  position: fixed;
+  transform: translateX(-100%);
+      animation: slide-out 0.1s forwards;
+  // -webkit-transform: translateX(-100%);
+
+}
+
+
+.container {
+  @include span-columns(12);
+  color: $palette-black;
+  background-color: $palette-grey-pale;
+  padding-bottom: em(60);
+  // border-right: 50px solid #919BA6;
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+overflow-y: scroll;
+
+}
+.itemGroup {
+
+}
+.show {
+  animation: slide-in 0.1s forwards;
+   // -webkit-animation: slide-in 0.5s forwards;
+}
+@keyframes slide-in {
+    100% { transform: translateX(0%); }
+}
+
+@keyframes slide-out {
+    0% { transform: translateX(0%); }
+    100% { transform: translateX(-100%); }
+}
+
+.useMyLocation {
+  margin: 5px 75px 7px 0px;
+  padding: 5px 70px 5px 15px;
+  width: 100%;
+
+}
+
+.useMyLocationButton {
+  border: 1px solid darken($palette-grey-light, 15%);
+  border-radius: 1px;
+  @include background(linear-gradient($palette-white, $palette-grey-light));
+  padding: 5px;
+  span {
+    font-size: $font-small;
+    position: relative;
+    top: -7px;
+  }
+}
+
+.useMyLocationIcon {
+  padding: 5px;
+}
+
+.search {
+  margin: 7px 70px 5px 15px;
+  padding: 5px;
+  background-color: $palette-white;
+  border: 2px solid darken($palette-grey-blue, 5%);
+  input {
+    border: none;
+    height: 100%;
+    width: 80%;
+    position: relative;
+    top: -7px;
+    font-size: $font-small;
+    &:focus {
+      outline: none;
+    }
+  }
+}
+
+.searchIcon {
+  padding: 5px;
+}
+
+.resultsHeader {
+  font-size: 18px;
+  padding: 15px;
+  color: $palette-black;
+  background-color: $palette-white;
+  border-top: 1px solid $palette-grey-blue;
+  border-bottom: 1px solid $palette-grey-blue;
+  width: 100%;
+}
+
+.heading {
+  @include pad();
+  font-size: 24px;
+  font-weight: bold;
+  color: $palette-grey-dark;
+}
+
+.recentHeader {
+  font-size: $font-normal;
+  padding: 15px;
+  color: $palette-black;
+  font-weight: bold;
+  background-color: $palette-grey-blue;
+  width: 100%;
+}
+
+.recentIcon {
+  font-size: 24px !important;
+  position: absolute;
+  padding: 0 15px;
+  margin-top: -2px;
+  right: 75px;
+}
+
+
+.icon {
+  padding: 8px;
+  font-size: 32px !important;
+}
+
+.sideBar {
+  position: fixed;
+  z-index: 11001;
+  height: 100%;
+  width: 50px;
+  background-color: #919BA6;
+  right: 0;
+  top: 0;
+}
+
+.hideIcon {
+  @extend .icon;
+  margin-top: 2px;
+  color: $palette-white;
+  position: absolute;
+
+}
+
+
+.action {
+  font-size: $font-normal;
+  float: left;
+  border-bottom: 2px solid $palette-white;
+  padding: 15px;
+  color: $palette-grey-dark;
+  background-color: $palette-grey-pale;
+  width: 100%;
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.actionIcon {
+  color: $palette-grey;
+  float: left;
+  font-size: 24px !important;
+  margin-right: 10px;
+}

@@ -1,0 +1,18 @@
+@import '../../theme/base.scss';
+@import '../../theme/variables.scss';
+
+.app {
+  min-height: 100%;
+}
+
+.content {
+  @include outer-container();
+  min-height: 100%;
+  margin: 0px auto -50px; /* the top margin is the negative value of the header's height */
+
+  &:after {
+    content: "";
+    display: block;
+    height: 50px;
+  }
+}
