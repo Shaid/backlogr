@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Package, Plus } from "lucide-react";
+import { Home, Package, Plus, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -20,6 +20,7 @@ import {
 const navItems = [
   { title: "All Items", href: "/", icon: Home },
   { title: "Add Item", href: "/items/new", icon: Plus },
+  { title: "Admin", href: "/admin", icon: Settings },
 ];
 
 export function AppSidebar() {
