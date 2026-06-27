@@ -189,6 +189,11 @@ async function savePhoto(file: File): Promise<string> {
   return `/uploads/${filename}`;
 }
 
+// Exported wrapper for triggering enrichment from API routes
+export async function triggerEnrichment(itemId: string) {
+  return enrichItem(itemId);
+}
+
 async function enrichItem(itemId: string) {
   const item = await prisma.item.findUnique({
     where: { id: itemId },
@@ -347,6 +352,9 @@ function looksLikeModelKit(item: {
 }
 
 // --- HLJ Scraper ---
+// Strategy: Use DuckDuckGo HTML search to find HLJ product URL,
+// then fetch the product page directly (HLJ WAF doesn't block product pages).
+// Product pages embed rich dataLayer JSON with name, price, description, etc.
 
 async function scrapeHLJ(
   name: string,
@@ -359,34 +367,50 @@ async function scrapeHLJ(
   url?: string;
 } | null> {
   try {
-    // Build search URL — try barcode first, then name
-    const searchQuery = barcode || name;
-    const searchUrl = `https://www.hlj.com/search/?q=${encodeURIComponent(searchQuery)}`;
+    // Step 1: Find HLJ product URL via DuckDuckGo HTML search
+    const query = barcode || name;
+    const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`site:hlj.com ${query}`)}`;
 
-    const res = await fetch(searchUrl, {
+    const searchRes = await fetch(ddgUrl, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; Backlogr/1.0; catalog app)",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
         Accept: "text/html",
       },
     });
-    if (!res.ok) return null;
-    const html = await res.text();
+    if (!searchRes.ok) {
+      console.log(`[enrichment] DuckDuckGo search returned ${searchRes.status}`);
+      return null;
+    }
+    const searchHtml = await searchRes.text();
 
-    // HLJ search results contain product links — find the first one
-    const productLinkMatch = html.match(
-      /href="(\/[a-z0-9-]+-[a-z]{2,6}\d{3,8})"/i
+    // Extract HLJ product URLs from DuckDuckGo results
+    // DDG encodes URLs as: uddg=https%3A%2F%2Fwww.hlj.com%2Fproduct-slug-SKUCODE
+    const urlMatches = searchHtml.matchAll(
+      /uddg=(https%3A%2F%2Fwww\.hlj\.com%2F[a-z0-9%\-]+)/gi
     );
-    if (!productLinkMatch) return null;
+    let productUrl: string | null = null;
+    for (const match of urlMatches) {
+      const decoded = decodeURIComponent(match[1]);
+      // Filter out search/category pages — product URLs end with a SKU code
+      if (
+        !decoded.includes("/search") &&
+        !decoded.includes("/browse") &&
+        /[a-z]{2,6}\d{3,8}$/.test(decoded)
+      ) {
+        productUrl = decoded;
+        break;
+      }
+    }
 
-    const productPath = productLinkMatch[1];
-    const productUrl = `https://www.hlj.com${productPath}`;
+    if (!productUrl) {
+      console.log(`[enrichment] No HLJ product URL found for "${name}"`);
+      return null;
+    }
 
-    // Fetch the product page
+    // Step 2: Fetch the product page directly (WAF doesn't block these)
     const productRes = await fetch(productUrl, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; Backlogr/1.0; catalog app)",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
         Accept: "text/html",
       },
     });
@@ -394,7 +418,8 @@ async function scrapeHLJ(
     const productHtml = await productRes.text();
 
     return parseHLJProductPage(productHtml, productUrl);
-  } catch {
+  } catch (err) {
+    console.log(`[enrichment] HLJ scrape error: ${err}`);
     return null;
   }
 }
@@ -418,7 +443,6 @@ function parseHLJProductPage(
 
     // Parse the product JSON (it may have single quotes or HTML entities)
     let productJson = dataLayerMatch[1];
-    // Fix common JSON issues in dataLayer
     productJson = productJson
       .replace(/\\'/g, "'")
       .replace(/'/g, '"')
@@ -428,7 +452,6 @@ function parseHLJProductPage(
     try {
       product = JSON.parse(productJson);
     } catch {
-      // Try extracting fields with regex as fallback
       const nameMatch = productJson.match(/"name":\s*"([^"]+)"/);
       const priceMatch = productJson.match(/"price":\s*(\d+)/);
       const descMatch = productJson.match(/"meta_description":\s*"([^"]+)"/);
@@ -460,14 +483,11 @@ function parseHLJProductPage(
       result.category = product.category as string;
     }
     if (product.price && typeof product.price === "number") {
-      // HLJ prices are in JPY — convert to USD roughly
       result.price = Math.round((product.price / 150) * 100) / 100;
     }
 
-    // Try to construct image URL from SKU
     if (sku) {
       const lowerSku = sku.toLowerCase();
-      // HLJ image pattern: /images/prm/{sku_lower}/{sku_lower}prm1.jpg
       result.imageUrl = `https://www.hlj.com/images/prm/${lowerSku}/${lowerSku}prm1.jpg`;
     }
 
@@ -477,68 +497,95 @@ function parseHLJProductPage(
   }
 }
 
-// --- eBay Price Scraper ---
+// --- Price Lookup ---
+// Uses UPCitemdb (barcode → offers) and DuckDuckGo HTML search as fallback.
+// eBay/Amazon block server-side scraping, so we use public APIs.
 
 async function searchEbayPrice(
   name: string,
   barcode: string | null
 ): Promise<{ price: number; source: string; url: string } | null> {
-  try {
-    // Search eBay for the item
-    const query = barcode || name;
-    const searchUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&_sop=15&LH_BIN=1&_ipg=25`;
+  // 1. Try UPCitemdb.com (free barcode lookup with pricing)
+  if (barcode) {
+    try {
+      const res = await fetch(
+        `https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`,
+        {
+          headers: { Accept: "application/json" },
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items?.[0]?.offers) {
+          const offers = data.items[0].offers as {
+            price?: number;
+            link?: string;
+            merchant?: string;
+          }[];
+          const prices = offers
+            .filter((o) => o.price && o.price > 0)
+            .map((o) => o.price as number);
+          if (prices.length > 0) {
+            prices.sort((a, b) => a - b);
+            const median = prices[Math.floor(prices.length / 2)];
+            return {
+              price: Math.round(median * 100) / 100,
+              source: `UPCitemdb (median of ${prices.length} offer${prices.length !== 1 ? "s" : ""})`,
+              url: `https://www.upcitemdb.com/upc/${barcode}`,
+            };
+          }
+        }
+      }
+    } catch {
+      // continue to next source
+    }
+  }
 
-    const res = await fetch(searchUrl, {
+  // 2. Try DuckDuckGo HTML search for eBay Buy It Now prices
+  try {
+    const query = barcode || name;
+    const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`site:ebay.com "${query}" buy it now`)}`;
+
+    const res = await fetch(ddgUrl, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
+        Accept: "text/html",
       },
     });
-    if (!res.ok) return null;
-    const html = await res.text();
+    if (res.ok) {
+      const html = await res.text();
+      // Extract prices from result snippets (DDG shows prices in snippets)
+      const prices: number[] = [];
+      const priceMatches = html.matchAll(/\$([\d,]+\.\d{2})/g);
+      for (const match of priceMatches) {
+        const price = parseFloat(match[1].replace(/,/g, ""));
+        if (price > 1 && price < 100000) {
+          prices.push(price);
+        }
+      }
 
-    // Extract prices from eBay search results
-    // eBay embeds prices in various patterns
-    const prices: number[] = [];
-
-    // Pattern 1: s-item__price with USD
-    const priceMatches = html.matchAll(
-      /class="s-item__price"[^>]*>\s*\$\s*([\d,]+\.?\d*)/g
-    );
-    for (const match of priceMatches) {
-      const price = parseFloat(match[1].replace(/,/g, ""));
-      if (price > 0 && price < 100000) {
-        prices.push(price);
+      if (prices.length > 0) {
+        prices.sort((a, b) => a - b);
+        const median = prices[Math.floor(prices.length / 2)];
+        const ebaySearchUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_BIN=1`;
+        return {
+          price: Math.round(median * 100) / 100,
+          source: `eBay via DuckDuckGo (median of ${prices.length} price${prices.length !== 1 ? "s" : ""})`,
+          url: ebaySearchUrl,
+        };
       }
     }
-
-    // Pattern 2: aria-label with price
-    const ariaMatches = html.matchAll(
-      /\$([\d,]+\.\d{2})\s*(?:to\s*\$[\d,]+\.\d{2})?\s*(?:Buy\s*It\s*Now|shipping)/gi
-    );
-    for (const match of ariaMatches) {
-      const price = parseFloat(match[1].replace(/,/g, ""));
-      if (price > 0 && price < 100000) {
-        prices.push(price);
-      }
-    }
-
-    if (prices.length === 0) return null;
-
-    // Use median price for more accurate estimate
-    prices.sort((a, b) => a - b);
-    const medianPrice = prices[Math.floor(prices.length / 2)];
-
-    return {
-      price: Math.round(medianPrice * 100) / 100,
-      source: `eBay (median of ${prices.length} listing${prices.length !== 1 ? "s" : ""})`,
-      url: searchUrl,
-    };
   } catch {
-    return null;
+    // continue
   }
+
+  // 3. Log manual lookup URL
+  const query = barcode || name;
+  const ebayUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_BIN=1`;
+  console.log(
+    `[enrichment] Automated price lookup failed for "${name}". Manual eBay search: ${ebayUrl}`
+  );
+  return null;
 }
 
 async function downloadImage(url: string): Promise<string | null> {

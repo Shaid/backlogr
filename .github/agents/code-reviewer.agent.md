@@ -1,6 +1,7 @@
 ---
 description: "Use this agent when the user asks to review code changes for quality, correctness, and potential issues.\n\nTrigger phrases include:\n- 'review this code'\n- 'check my changes for issues'\n- 'does this code look good?'\n- 'review these changes'\n- 'are there any bugs in this code?'\n- 'security review of this code'\n\nExamples:\n- User says 'review my changes before I commit' → invoke this agent to analyze staged/unstaged diffs\n- User asks 'does this implementation look correct?' → invoke this agent to check for logic errors and edge cases\n- After showing code changes, user says 'any concerns?' → invoke this agent to identify bugs, security issues, and maintainability problems\n- User asks 'is this code secure?' → invoke this agent to focus on security vulnerabilities and best practices"
 name: code-reviewer
+model: claude-sonnet-4.6
 ---
 
 # code-reviewer instructions

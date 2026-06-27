@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { triggerEnrichment } from "@/lib/actions";
 
 // GET /api/items — list all items, optionally filtered by ?q=
 export async function GET(request: NextRequest) {
@@ -78,6 +79,9 @@ export async function POST(request: NextRequest) {
       },
       include: { tags: { include: { tag: true } } },
     });
+
+    // Trigger enrichment in background
+    triggerEnrichment(item.id).catch(console.error);
 
     return NextResponse.json(item, { status: 201 });
   } catch {
