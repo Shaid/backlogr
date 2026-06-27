@@ -14,19 +14,21 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BarcodeDisplay } from "@/components/barcode-display";
+import { ItemGallery } from "@/components/item-gallery";
 import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { deleteItem } from "@/lib/actions";
 import { prisma } from "@/lib/db";
+import { itemWithRelationsInclude } from "@/lib/items";
 import { DeleteButton } from "./delete-button";
 
 export default async function ItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const item = await prisma.item.findUnique({
     where: { id },
-    include: { tags: { include: { tag: true } } },
+    include: itemWithRelationsInclude,
   });
 
   if (!item) notFound();
@@ -78,20 +80,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
         </div>
       )}
 
-      {/* Photo */}
-      {item.photo ? (
-        <div className="rounded-2xl overflow-hidden border border-border">
-          <img
-            src={item.photo}
-            alt={item.name}
-            className="w-full max-h-[28rem] object-contain bg-muted/30"
-          />
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-border bg-muted/30 flex items-center justify-center h-48">
-          <Package className="w-12 h-12 text-muted-foreground/20" />
-        </div>
-      )}
+      <ItemGallery itemName={item.name} images={item.images} fallbackPhoto={item.photo} />
 
       {/* Description */}
       {item.description && (

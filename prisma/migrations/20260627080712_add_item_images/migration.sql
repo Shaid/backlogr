@@ -1,0 +1,10 @@
+-- CreateTable
+CREATE TABLE "ItemImage" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "itemId" TEXT NOT NULL,
+    "url" TEXT NOT NULL,
+    "isHero" BOOLEAN NOT NULL DEFAULT false,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ItemImage_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);

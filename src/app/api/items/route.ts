@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { triggerEnrichment } from "@/lib/actions";
 import { prisma } from "@/lib/db";
+import { normalizeApiImages } from "@/lib/item-images";
+import { itemWithRelationsInclude } from "@/lib/items";
 import { resolveTagConnections } from "@/lib/tags";
 
 // GET /api/items — list all items, optionally filtered by ?q=
@@ -23,11 +25,11 @@ export async function GET(request: NextRequest) {
             },
           ],
         },
-        include: { tags: { include: { tag: true } } },
+        include: itemWithRelationsInclude,
         orderBy: { updatedAt: "desc" },
       })
     : await prisma.item.findMany({
-        include: { tags: { include: { tag: true } } },
+        include: itemWithRelationsInclude,
         orderBy: { updatedAt: "desc" },
       });
 
@@ -55,6 +57,7 @@ export async function POST(request: NextRequest) {
     location,
     notes,
     photo,
+    images,
     tags: tagNames,
   } = body;
 
@@ -63,6 +66,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const normalizedImages = await normalizeApiImages(images);
     const item = await prisma.item.create({
       data: {
         name: String(name).trim(),
@@ -75,13 +79,16 @@ export async function POST(request: NextRequest) {
         barcode: (barcode as string) ?? null,
         location: (location as string) ?? null,
         notes: (notes as string) ?? null,
-        photo: (photo as string) ?? null,
+        photo: normalizedImages.photo ?? (photo as string) ?? null,
         enrichStatus: barcode || name ? "pending" : "none",
+        images: {
+          create: normalizedImages.images,
+        },
         tags: {
           create: await resolveTagConnections(tagNames as string[]),
         },
       },
-      include: { tags: { include: { tag: true } } },
+      include: itemWithRelationsInclude,
     });
 
     // Trigger enrichment in background (fire and forget)

@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { safeDeletePhoto } from "@/lib/files";
+import { normalizeApiImages } from "@/lib/item-images";
+import { itemWithRelationsInclude } from "@/lib/items";
 import { resolveTagConnections } from "@/lib/tags";
 
 // GET /api/items/:id
@@ -8,7 +10,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const { id } = await params;
   const item = await prisma.item.findUnique({
     where: { id },
-    include: { tags: { include: { tag: true } } },
+    include: itemWithRelationsInclude,
   });
 
   if (!item) {
@@ -21,7 +23,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 // PUT /api/items/:id
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const existing = await prisma.item.findUnique({ where: { id } });
+  const existing = await prisma.item.findUnique({
+    where: { id },
+    include: { images: true },
+  });
   if (!existing) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
   }
@@ -45,6 +50,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     location,
     notes,
     photo,
+    images,
     tags: tagNames,
   } = body;
 
@@ -52,10 +58,37 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const normalizedPhoto = photo === "" ? null : photo;
 
   try {
+    const normalizedImages = await normalizeApiImages(images);
+    const deletedImageUrls: string[] = [];
+
     // Wrap tag delete + recreate in a transaction for atomicity
     const item = await prisma.$transaction(async (tx) => {
       await tx.tagOnItem.deleteMany({ where: { itemId: id } });
       const tagConnections = await resolveTagConnections(tagNames as string[], tx);
+
+      if (Array.isArray(images)) {
+        const currentImageUrls = existing.images.map((image) => image.url);
+        const nextImageUrls = normalizedImages.images.map((image) => image.url);
+
+        deletedImageUrls.push(
+          ...currentImageUrls.filter(
+            (imageUrl) =>
+              !nextImageUrls.includes(imageUrl) &&
+              imageUrl !== normalizedImages.photo &&
+              imageUrl !== normalizedPhoto,
+          ),
+        );
+        if (
+          existing.photo &&
+          existing.images.length === 0 &&
+          existing.photo !== normalizedImages.photo &&
+          existing.photo !== normalizedPhoto
+        ) {
+          deletedImageUrls.push(existing.photo);
+        }
+
+        await tx.itemImage.deleteMany({ where: { itemId: id } });
+      }
 
       return tx.item.update({
         where: { id },
@@ -74,12 +107,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           ...(barcode !== undefined && { barcode: barcode as string | null }),
           ...(location !== undefined && { location: location as string | null }),
           ...(notes !== undefined && { notes: notes as string | null }),
-          ...(normalizedPhoto !== undefined && { photo: normalizedPhoto as string | null }),
+          ...(normalizedPhoto !== undefined || Array.isArray(images)
+            ? { photo: normalizedImages.photo ?? (normalizedPhoto as string | null) }
+            : {}),
+          ...(Array.isArray(images)
+            ? {
+                images: {
+                  create: normalizedImages.images,
+                },
+              }
+            : {}),
           tags: { create: tagConnections },
         },
-        include: { tags: { include: { tag: true } } },
+        include: itemWithRelationsInclude,
       });
     });
+
+    await Promise.all([...new Set(deletedImageUrls)].map((imageUrl) => safeDeletePhoto(imageUrl)));
 
     return NextResponse.json(item);
   } catch (err) {
@@ -94,15 +138,23 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const item = await prisma.item.findUnique({ where: { id } });
+  const item = await prisma.item.findUnique({
+    where: { id },
+    include: { images: true },
+  });
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
   }
 
+  const imageUrls = new Set<string>();
   if (item.photo) {
-    await safeDeletePhoto(item.photo);
+    imageUrls.add(item.photo);
+  }
+  for (const image of item.images) {
+    imageUrls.add(image.url);
   }
 
   await prisma.item.delete({ where: { id } });
+  await Promise.all([...imageUrls].map((imageUrl) => safeDeletePhoto(imageUrl)));
   return NextResponse.json({ success: true });
 }

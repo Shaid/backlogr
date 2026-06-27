@@ -5,6 +5,7 @@ import { ItemCard } from "@/components/item-card";
 import { SearchBar } from "@/components/search-bar";
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/db";
+import { itemWithRelationsInclude } from "@/lib/items";
 
 export default async function HomePage({
   searchParams,
@@ -31,11 +32,11 @@ export default async function HomePage({
             },
           ],
         },
-        include: { tags: { include: { tag: true } } },
+        include: itemWithRelationsInclude,
         orderBy: { updatedAt: "desc" },
       })
     : await prisma.item.findMany({
-        include: { tags: { include: { tag: true } } },
+        include: itemWithRelationsInclude,
         orderBy: { updatedAt: "desc" },
       });
 

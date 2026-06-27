@@ -5,12 +5,21 @@ import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { safeDeletePhoto } from "@/lib/files";
+import {
+  ALLOWED_UPLOAD_TYPES,
+  getImageExtensionForContentType,
+  safeDeletePhoto,
+  saveUploadedImages,
+} from "@/lib/files";
+import {
+  buildCreateImagePayload,
+  getImageFilesFromFormData,
+  syncItemImagesFromFormData,
+} from "@/lib/item-images";
+import { itemWithRelationsInclude } from "@/lib/items";
 
 const FETCH_TIMEOUT_MS = 8_000;
 const MAX_IMAGE_DOWNLOAD_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_UPLOAD_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10MB
 
 function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
   return fetch(url, {
@@ -33,13 +42,7 @@ export async function createItem(formData: FormData) {
   const location = (formData.get("location") as string) || null;
   const notes = (formData.get("notes") as string) || null;
   const tagsStr = (formData.get("tags") as string) || "";
-
-  // Handle photo upload
-  let photoPath: string | null = null;
-  const photo = formData.get("photo") as File;
-  if (photo && photo.size > 0) {
-    photoPath = await savePhoto(photo);
-  }
+  const imagePayload = await buildCreateImagePayload(formData);
 
   // Parse tags
   const tagNames = tagsStr
@@ -47,34 +50,44 @@ export async function createItem(formData: FormData) {
     .map((t) => t.trim())
     .filter(Boolean);
 
-  const item = await prisma.item.create({
-    data: {
-      name,
-      description,
-      category,
-      quantity,
-      purchaseDate,
-      value,
-      condition,
-      barcode,
-      location,
-      notes,
-      photo: photoPath,
-      enrichStatus: barcode || name ? "pending" : "none",
-      tags: {
-        create: await Promise.all(
-          tagNames.map(async (tagName) => {
-            const tag = await prisma.tag.upsert({
-              where: { name: tagName },
-              update: {},
-              create: { name: tagName },
-            });
-            return { tagId: tag.id };
-          }),
-        ),
-      },
-    },
-  });
+  const item = await (async () => {
+    try {
+      return await prisma.item.create({
+        data: {
+          name,
+          description,
+          category,
+          quantity,
+          purchaseDate,
+          value,
+          condition,
+          barcode,
+          location,
+          notes,
+          photo: imagePayload.photo,
+          enrichStatus: barcode || name ? "pending" : "none",
+          images: {
+            create: imagePayload.images,
+          },
+          tags: {
+            create: await Promise.all(
+              tagNames.map(async (tagName) => {
+                const tag = await prisma.tag.upsert({
+                  where: { name: tagName },
+                  update: {},
+                  create: { name: tagName },
+                });
+                return { tagId: tag.id };
+              }),
+            ),
+          },
+        },
+      });
+    } catch (error) {
+      await Promise.all(imagePayload.images.map((image) => safeDeletePhoto(image.url)));
+      throw error;
+    }
+  })();
 
   // Trigger enrichment in background (fire and forget)
   enrichItem(item.id).catch(console.error);
@@ -84,6 +97,14 @@ export async function createItem(formData: FormData) {
 }
 
 export async function updateItem(id: string, formData: FormData) {
+  const existingItem = await prisma.item.findUnique({
+    where: { id },
+    include: { images: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } },
+  });
+  if (!existingItem) {
+    throw new Error("Item not found");
+  }
+
   const name = formData.get("name") as string;
   const description = (formData.get("description") as string) || null;
   const category = (formData.get("category") as string) || null;
@@ -98,57 +119,63 @@ export async function updateItem(id: string, formData: FormData) {
   const notes = (formData.get("notes") as string) || null;
   const tagsStr = (formData.get("tags") as string) || "";
 
-  // Handle photo upload
-  let photoPath: string | null | undefined;
-  const photo = formData.get("photo") as File;
-  if (photo && photo.size > 0) {
-    photoPath = await savePhoto(photo);
-  }
-  const removePhoto = formData.get("removePhoto") === "true";
-  if (removePhoto) {
-    photoPath = null;
-  }
-
   const tagNames = tagsStr
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
+  const uploadedImageUrls = await saveUploadedImages(getImageFilesFromFormData(formData));
 
   // Wrap tag delete + recreate in a transaction for atomicity
-  await prisma.$transaction(async (tx) => {
-    await tx.tagOnItem.deleteMany({ where: { itemId: id } });
+  let deletedImageUrls: string[] = [];
+  try {
+    deletedImageUrls = await prisma.$transaction(async (tx) => {
+      await tx.tagOnItem.deleteMany({ where: { itemId: id } });
 
-    const tagConnections = await Promise.all(
-      tagNames.map(async (tagName) => {
-        const tag = await tx.tag.upsert({
-          where: { name: tagName },
-          update: {},
-          create: { name: tagName },
-        });
-        return { tagId: tag.id };
-      }),
-    );
+      const tagConnections = await Promise.all(
+        tagNames.map(async (tagName) => {
+          const tag = await tx.tag.upsert({
+            where: { name: tagName },
+            update: {},
+            create: { name: tagName },
+          });
+          return { tagId: tag.id };
+        }),
+      );
 
-    await tx.item.update({
-      where: { id },
-      data: {
-        name,
-        description,
-        category,
-        quantity,
-        purchaseDate,
-        value,
-        condition,
-        barcode,
-        location,
-        notes,
-        ...(photoPath !== undefined ? { photo: photoPath } : {}),
-        tags: {
-          create: tagConnections,
+      const imageResult = await syncItemImagesFromFormData(
+        tx,
+        existingItem,
+        formData,
+        uploadedImageUrls,
+      );
+
+      await tx.item.update({
+        where: { id },
+        data: {
+          name,
+          description,
+          category,
+          quantity,
+          purchaseDate,
+          value,
+          condition,
+          barcode,
+          location,
+          notes,
+          photo: imageResult.photo,
+          tags: {
+            create: tagConnections,
+          },
         },
-      },
+      });
+      return imageResult.deletedUrls;
     });
-  });
+  } catch (error) {
+    await Promise.all(uploadedImageUrls.map((imageUrl) => safeDeletePhoto(imageUrl)));
+    throw error;
+  }
+
+  await Promise.all(deletedImageUrls.map((imageUrl) => safeDeletePhoto(imageUrl)));
 
   revalidatePath("/");
   revalidatePath(`/items/${id}`);
@@ -156,12 +183,20 @@ export async function updateItem(id: string, formData: FormData) {
 }
 
 export async function deleteItem(id: string) {
-  const item = await prisma.item.findUnique({ where: { id } });
+  const item = await prisma.item.findUnique({
+    where: { id },
+    include: { images: true },
+  });
+  const imageUrls = new Set<string>();
   if (item?.photo) {
-    await safeDeletePhoto(item.photo);
+    imageUrls.add(item.photo);
+  }
+  for (const image of item?.images ?? []) {
+    imageUrls.add(image.url);
   }
 
   await prisma.item.delete({ where: { id } });
+  await Promise.all([...imageUrls].map((imageUrl) => safeDeletePhoto(imageUrl)));
   revalidatePath("/");
   redirect("/");
 }
@@ -184,39 +219,9 @@ export async function searchItems(query: string) {
         },
       ],
     },
-    include: { tags: { include: { tag: true } } },
+    include: itemWithRelationsInclude,
     orderBy: { updatedAt: "desc" },
   });
-}
-
-async function savePhoto(file: File): Promise<string> {
-  // Validate file type and size
-  if (!ALLOWED_UPLOAD_TYPES.has(file.type)) {
-    throw new Error(`Invalid file type: ${file.type}. Allowed: JPEG, PNG, WebP, GIF`);
-  }
-  if (file.size > MAX_UPLOAD_SIZE) {
-    throw new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max: 10MB`);
-  }
-
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-
-  const uploadDir = path.join(process.cwd(), "public", "uploads");
-  await fs.mkdir(uploadDir, { recursive: true });
-
-  // Force extension from MIME type (ignore user-provided filename)
-  const extMap: Record<string, string> = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-  };
-  const ext = extMap[file.type] ?? ".jpg";
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
-  const filePath = path.join(uploadDir, filename);
-
-  await fs.writeFile(filePath, buffer);
-  return `/uploads/${filename}`;
 }
 
 // Exported wrapper for triggering enrichment from API routes
@@ -227,7 +232,7 @@ export async function triggerEnrichment(itemId: string) {
 async function enrichItem(itemId: string) {
   const item = await prisma.item.findUnique({
     where: { id: itemId },
-    include: { tags: { include: { tag: true } } },
+    include: itemWithRelationsInclude,
   });
   if (!item) return;
 
@@ -240,6 +245,7 @@ async function enrichItem(itemId: string) {
       priceSource?: string;
       sourceUrl?: string;
     } = {};
+    let enrichedImageUrl: string | null = null;
 
     const isModelKit = looksLikeModelKit(item);
 
@@ -253,9 +259,12 @@ async function enrichItem(itemId: string) {
         if (!item.category && hljData.category) {
           enrichedData.category = hljData.category;
         }
-        if (!item.photo && hljData.imageUrl) {
+        if (!item.photo && item.images.length === 0 && hljData.imageUrl) {
           const photoPath = await downloadImage(hljData.imageUrl);
-          if (photoPath) enrichedData.photo = photoPath;
+          if (photoPath) {
+            enrichedData.photo = photoPath;
+            enrichedImageUrl = photoPath;
+          }
         }
         if (hljData.price) {
           enrichedData.marketPrice = hljData.price;
@@ -282,9 +291,12 @@ async function enrichItem(itemId: string) {
           if (!item.category && product.categories) {
             enrichedData.category = product.categories.split(",")[0]?.trim();
           }
-          if (!item.photo && product.image_url) {
+          if (!item.photo && item.images.length === 0 && product.image_url) {
             const photoPath = await downloadImage(product.image_url);
-            if (photoPath) enrichedData.photo = photoPath;
+            if (photoPath) {
+              enrichedData.photo = photoPath;
+              enrichedImageUrl = photoPath;
+            }
           }
         }
       } catch {
@@ -311,9 +323,12 @@ async function enrichItem(itemId: string) {
           if (!item.category) {
             enrichedData.category = "Books";
           }
-          if (!item.photo && book.cover?.large) {
+          if (!item.photo && item.images.length === 0 && book.cover?.large) {
             const photoPath = await downloadImage(book.cover.large);
-            if (photoPath) enrichedData.photo = photoPath;
+            if (photoPath) {
+              enrichedData.photo = photoPath;
+              enrichedImageUrl = photoPath;
+            }
           }
         }
       } catch {
@@ -337,6 +352,17 @@ async function enrichItem(itemId: string) {
       where: { id: itemId },
       data: {
         ...enrichedData,
+        ...(enrichedImageUrl
+          ? {
+              images: {
+                create: {
+                  url: enrichedImageUrl,
+                  isHero: true,
+                  sortOrder: 0,
+                },
+              },
+            }
+          : {}),
         enrichStatus: Object.keys(enrichedData).length > 0 ? "complete" : "failed",
       },
     });
@@ -603,13 +629,6 @@ async function searchEbayPrice(
 }
 
 async function downloadImage(url: string): Promise<string | null> {
-  const extMap: Record<string, string> = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-  };
-
   try {
     const res = await fetchWithTimeout(url, {
       headers: {
@@ -642,7 +661,7 @@ async function downloadImage(url: string): Promise<string | null> {
     await fs.mkdir(uploadDir, { recursive: true });
 
     // Derive extension from content-type, not URL
-    const ext = extMap[contentType] ?? ".jpg";
+    const ext = getImageExtensionForContentType(contentType);
     const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
     const filePath = path.join(uploadDir, filename);
 

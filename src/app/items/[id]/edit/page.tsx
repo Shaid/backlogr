@@ -4,12 +4,13 @@ import { notFound } from "next/navigation";
 import { ItemForm } from "@/components/item-form";
 import { updateItem } from "@/lib/actions";
 import { prisma } from "@/lib/db";
+import { itemWithRelationsInclude } from "@/lib/items";
 
 export default async function EditItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const item = await prisma.item.findUnique({
     where: { id },
-    include: { tags: { include: { tag: true } } },
+    include: itemWithRelationsInclude,
   });
 
   if (!item) notFound();

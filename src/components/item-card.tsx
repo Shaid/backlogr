@@ -2,16 +2,19 @@ import { MapPin, Package } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { getItemDisplayImage } from "@/lib/items";
 import type { ItemWithTags } from "@/types";
 
 export function ItemCard({ item }: { item: ItemWithTags }) {
+  const displayImage = getItemDisplayImage(item);
+
   return (
     <Link href={`/items/${item.id}`} className="group">
       <Card className="overflow-hidden h-full transition-all duration-200 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 hover:-translate-y-0.5">
         <div className="aspect-[4/3] w-full overflow-hidden bg-muted/50">
-          {item.photo ? (
+          {displayImage ? (
             <img
-              src={item.photo}
+              src={displayImage}
               alt={item.name}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             />

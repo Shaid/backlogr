@@ -1,5 +1,5 @@
 // Mock Prisma before any imports
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Jest mock shape is intentionally dynamic.
 const mockPrisma: any = {
   item: {
     findMany: jest.fn(),
@@ -13,6 +13,13 @@ const mockPrisma: any = {
   },
   tagOnItem: {
     deleteMany: jest.fn(),
+  },
+  itemImage: {
+    deleteMany: jest.fn(),
+    delete: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+    create: jest.fn(),
   },
 };
 mockPrisma.$transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(mockPrisma));
@@ -57,6 +64,7 @@ const sampleItem = {
   enrichStatus: "none",
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
+  images: [],
   tags: [
     {
       itemId: "test-id-1",

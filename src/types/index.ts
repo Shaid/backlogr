@@ -19,6 +19,15 @@ export type Item = {
   updatedAt: Date;
 };
 
+export type ItemImage = {
+  id: string;
+  itemId: string;
+  url: string;
+  isHero: boolean;
+  sortOrder: number;
+  createdAt: Date;
+};
+
 export type Tag = {
   id: string;
   name: string;
@@ -30,5 +39,6 @@ export type TagOnItem = {
 };
 
 export type ItemWithTags = Item & {
+  images: ItemImage[];
   tags: (TagOnItem & { tag: Tag })[];
 };
