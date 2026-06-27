@@ -1,5 +1,6 @@
 // Mock Prisma before any imports
-const mockPrisma = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockPrisma: any = {
   item: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
@@ -14,16 +15,25 @@ const mockPrisma = {
     deleteMany: jest.fn(),
   },
 };
+mockPrisma.$transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(mockPrisma));
 
 jest.mock("@/lib/db", () => ({
   prisma: mockPrisma,
 }));
 
-import { GET, POST } from "@/app/api/items/route";
+jest.mock("@/lib/actions", () => ({
+  triggerEnrichment: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("@/lib/tags", () => ({
+  resolveTagConnections: jest.fn().mockResolvedValue([]),
+}));
+
 import { NextRequest } from "next/server";
+import { GET, POST } from "@/app/api/items/route";
 
 function makeRequest(url: string, init?: RequestInit) {
-  return new NextRequest(new URL(url, "http://localhost:3000"), init);
+  return new NextRequest(new URL(url, "http://localhost:3000"), init as never);
 }
 
 const sampleItem = {
@@ -122,7 +132,6 @@ describe("POST /api/items", () => {
   });
 
   it("creates an item with all fields", async () => {
-    mockPrisma.tag.upsert.mockResolvedValue({ id: "tag-1", name: "gadget" });
     mockPrisma.item.create.mockResolvedValue(sampleItem);
 
     const req = makeRequest("http://localhost:3000/api/items", {
@@ -146,11 +155,9 @@ describe("POST /api/items", () => {
 
     expect(res.status).toBe(201);
     expect(body.tags).toHaveLength(1);
-    expect(mockPrisma.tag.upsert).toHaveBeenCalledWith({
-      where: { name: "gadget" },
-      update: {},
-      create: { name: "gadget" },
-    });
+    // resolveTagConnections is mocked — verify it was called with the tags
+    const { resolveTagConnections } = require("@/lib/tags");
+    expect(resolveTagConnections).toHaveBeenCalledWith(["gadget"]);
   });
 
   it("returns 400 when name is missing", async () => {
@@ -197,7 +204,6 @@ describe("POST /api/items", () => {
   });
 
   it("handles tags with whitespace and empty strings", async () => {
-    mockPrisma.tag.upsert.mockResolvedValue({ id: "tag-1", name: "clean" });
     mockPrisma.item.create.mockResolvedValue({ ...sampleItem, tags: [] });
 
     const req = makeRequest("http://localhost:3000/api/items", {
@@ -211,12 +217,8 @@ describe("POST /api/items", () => {
 
     await POST(req);
 
-    // Only "clean" should be upserted (empty strings filtered out)
-    expect(mockPrisma.tag.upsert).toHaveBeenCalledTimes(1);
-    expect(mockPrisma.tag.upsert).toHaveBeenCalledWith({
-      where: { name: "clean" },
-      update: {},
-      create: { name: "clean" },
-    });
+    // resolveTagConnections receives the raw array — it handles trimming internally
+    const { resolveTagConnections } = require("@/lib/tags");
+    expect(resolveTagConnections).toHaveBeenCalledWith(["  clean  ", "", "  "]);
   });
 });

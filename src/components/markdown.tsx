@@ -9,13 +9,21 @@ const components: Components = {
   h3: (props) => <h3 className="text-sm font-semibold mt-2 mb-1" {...props} />,
   p: (props) => <p className="text-sm leading-relaxed mb-2 last:mb-0" {...props} />,
   a: (props) => (
-    <a className="text-primary hover:underline" target="_blank" rel="noopener noreferrer" {...props} />
+    <a
+      className="text-primary hover:underline"
+      target="_blank"
+      rel="noopener noreferrer"
+      {...props}
+    />
   ),
   ul: (props) => <ul className="text-sm list-disc pl-5 mb-2 space-y-0.5" {...props} />,
   ol: (props) => <ol className="text-sm list-decimal pl-5 mb-2 space-y-0.5" {...props} />,
   li: (props) => <li className="leading-relaxed" {...props} />,
   blockquote: (props) => (
-    <blockquote className="border-l-2 border-primary/40 pl-3 my-2 text-sm text-muted-foreground italic" {...props} />
+    <blockquote
+      className="border-l-2 border-primary/40 pl-3 my-2 text-sm text-muted-foreground italic"
+      {...props}
+    />
   ),
   code: ({ className, children, ...props }) => {
     const isBlock = className?.includes("language-");
@@ -45,7 +53,7 @@ const components: Components = {
   ),
   td: (props) => <td className="border border-border px-3 py-1.5" {...props} />,
   hr: () => <hr className="border-border my-3" />,
-  img: (props) => <img className="rounded-lg max-w-full" {...props} />,
+  img: (props) => <img className="rounded-lg max-w-full" alt="" {...props} />,
 };
 
 export function Markdown({ children }: { children: string }) {

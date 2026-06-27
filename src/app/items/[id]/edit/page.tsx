@@ -1,15 +1,11 @@
-import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
-import { updateItem } from "@/lib/actions";
-import { ItemForm } from "@/components/item-form";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ItemForm } from "@/components/item-form";
+import { updateItem } from "@/lib/actions";
+import { prisma } from "@/lib/db";
 
-export default async function EditItemPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function EditItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const item = await prisma.item.findUnique({
     where: { id },
@@ -29,9 +25,7 @@ export default async function EditItemPage({
         <ArrowLeft className="w-4 h-4" />
         Back to item
       </Link>
-      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-8">
-        Edit Item
-      </h1>
+      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-8">Edit Item</h1>
       <ItemForm item={item} action={updateWithId} submitLabel="Save Changes" />
     </div>
   );

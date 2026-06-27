@@ -1,33 +1,28 @@
+import {
+  ArrowLeft,
+  Calendar,
+  DollarSign,
+  ExternalLink,
+  Layers,
+  Loader2,
+  MapPin,
+  Package,
+  Pencil,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
-import { deleteItem } from "@/lib/actions";
+import { BarcodeDisplay } from "@/components/barcode-display";
+import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import {
-  ArrowLeft,
-  Pencil,
-  MapPin,
-  Calendar,
-  DollarSign,
-  Barcode,
-  Package,
-  Layers,
-  Sparkles,
-  Loader2,
-  TrendingUp,
-  ExternalLink,
-} from "lucide-react";
-import Link from "next/link";
+import { deleteItem } from "@/lib/actions";
+import { prisma } from "@/lib/db";
 import { DeleteButton } from "./delete-button";
-import { BarcodeDisplay } from "@/components/barcode-display";
-import { Markdown } from "@/components/markdown";
 
-export default async function ItemDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function ItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const item = await prisma.item.findUnique({
     where: { id },
@@ -52,15 +47,16 @@ export default async function ItemDetailPage({
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1 min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">
-            {item.name}
-          </h1>
-          {item.category && (
-            <p className="text-sm text-muted-foreground">{item.category}</p>
-          )}
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">{item.name}</h1>
+          {item.category && <p className="text-sm text-muted-foreground">{item.category}</p>}
         </div>
         <div className="flex gap-2 shrink-0">
-          <Button render={<Link href={`/items/${item.id}/edit`} />} variant="outline" size="sm" className="gap-1.5">
+          <Button
+            render={<Link href={`/items/${item.id}/edit`} />}
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+          >
             <Pencil className="w-3.5 h-3.5" />
             Edit
           </Button>
@@ -134,11 +130,7 @@ export default async function ItemDetailPage({
           />
         )}
         {item.location && (
-          <MetaField
-            icon={<MapPin className="w-4 h-4" />}
-            label="Location"
-            value={item.location}
-          />
+          <MetaField icon={<MapPin className="w-4 h-4" />} label="Location" value={item.location} />
         )}
         {item.marketPrice != null && (
           <MetaField
@@ -152,7 +144,10 @@ export default async function ItemDetailPage({
       {/* Market price source */}
       {item.priceSource && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Price via {item.priceSource}</span>
+          <span>
+            Price via {item.priceSource}
+            {item.priceSource === "HLJ.com" && " (approx. JPY→USD)"}
+          </span>
           {item.sourceUrl && (
             <a
               href={item.sourceUrl}
@@ -232,9 +227,7 @@ function MetaField({
       <div className="text-muted-foreground mt-0.5">{icon}</div>
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={`text-sm font-medium truncate ${mono ? "font-mono" : ""}`}>
-          {value}
-        </p>
+        <p className={`text-sm font-medium truncate ${mono ? "font-mono" : ""}`}>{value}</p>
       </div>
     </div>
   );

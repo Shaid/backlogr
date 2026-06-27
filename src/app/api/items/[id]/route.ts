@@ -1,13 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import path from "path";
-import fs from "fs/promises";
+import { safeDeletePhoto } from "@/lib/files";
+import { resolveTagConnections } from "@/lib/tags";
 
 // GET /api/items/:id
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const item = await prisma.item.findUnique({
     where: { id },
@@ -22,74 +19,79 @@ export async function GET(
 }
 
 // PUT /api/items/:id
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const existing = await prisma.item.findUnique({ where: { id } });
   if (!existing) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
   }
 
+  let body: Record<string, unknown>;
   try {
-    const body = await request.json();
-    const {
-      name,
-      description,
-      category,
-      quantity,
-      purchaseDate,
-      value,
-      condition,
-      barcode,
-      location,
-      notes,
-      photo,
-      tags: tagNames,
-    } = body;
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-    // Remove existing tag associations and recreate
-    await prisma.tagOnItem.deleteMany({ where: { itemId: id } });
+  const {
+    name,
+    description,
+    category,
+    quantity,
+    purchaseDate,
+    value,
+    condition,
+    barcode,
+    location,
+    notes,
+    photo,
+    tags: tagNames,
+  } = body;
 
-    const item = await prisma.item.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(description !== undefined && { description }),
-        ...(category !== undefined && { category }),
-        ...(quantity !== undefined && { quantity }),
-        ...(purchaseDate !== undefined && {
-          purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
-        }),
-        ...(value !== undefined && {
-          value: value != null ? parseFloat(value) : null,
-        }),
-        ...(condition !== undefined && { condition }),
-        ...(barcode !== undefined && { barcode }),
-        ...(location !== undefined && { location }),
-        ...(notes !== undefined && { notes }),
-        ...(photo !== undefined && { photo }),
-        tags: {
-          create: await resolveTagConnections(tagNames),
+  // Normalize empty string photo to null
+  const normalizedPhoto = photo === "" ? null : photo;
+
+  try {
+    // Wrap tag delete + recreate in a transaction for atomicity
+    const item = await prisma.$transaction(async (tx) => {
+      await tx.tagOnItem.deleteMany({ where: { itemId: id } });
+      const tagConnections = await resolveTagConnections(tagNames as string[], tx);
+
+      return tx.item.update({
+        where: { id },
+        data: {
+          ...(name !== undefined && { name: String(name) }),
+          ...(description !== undefined && { description: description as string | null }),
+          ...(category !== undefined && { category: category as string | null }),
+          ...(quantity !== undefined && { quantity: Number(quantity) }),
+          ...(purchaseDate !== undefined && {
+            purchaseDate: purchaseDate ? new Date(purchaseDate as string) : null,
+          }),
+          ...(value !== undefined && {
+            value: value != null ? Number.parseFloat(String(value)) : null,
+          }),
+          ...(condition !== undefined && { condition: condition as string | null }),
+          ...(barcode !== undefined && { barcode: barcode as string | null }),
+          ...(location !== undefined && { location: location as string | null }),
+          ...(notes !== undefined && { notes: notes as string | null }),
+          ...(normalizedPhoto !== undefined && { photo: normalizedPhoto as string | null }),
+          tags: { create: tagConnections },
         },
-      },
-      include: { tags: { include: { tag: true } } },
+        include: { tags: { include: { tag: true } } },
+      });
     });
 
     return NextResponse.json(item);
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid request body" },
-      { status: 400 }
-    );
+  } catch (err) {
+    console.error("Failed to update item:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
 // DELETE /api/items/:id
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
   const item = await prisma.item.findUnique({ where: { id } });
@@ -97,31 +99,10 @@ export async function DELETE(
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
   }
 
-  // Clean up photo file
   if (item.photo) {
-    const filePath = path.join(process.cwd(), "public", item.photo);
-    await fs.unlink(filePath).catch(() => {});
+    await safeDeletePhoto(item.photo);
   }
 
   await prisma.item.delete({ where: { id } });
   return NextResponse.json({ success: true });
-}
-
-async function resolveTagConnections(
-  tagNames?: string[]
-): Promise<{ tagId: string }[]> {
-  if (!tagNames || !Array.isArray(tagNames)) return [];
-  return Promise.all(
-    tagNames
-      .map((t) => (typeof t === "string" ? t.trim() : ""))
-      .filter(Boolean)
-      .map(async (name) => {
-        const tag = await prisma.tag.upsert({
-          where: { name },
-          update: {},
-          create: { name },
-        });
-        return { tagId: tag.id };
-      })
-  );
 }

@@ -1,16 +1,29 @@
 "use server";
 
-import { prisma } from "@/lib/db";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import path from "path";
-import fs from "fs/promises";
+import { prisma } from "@/lib/db";
+import { safeDeletePhoto } from "@/lib/files";
+
+const FETCH_TIMEOUT_MS = 8_000;
+const MAX_IMAGE_DOWNLOAD_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_UPLOAD_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10MB
+
+function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  return fetch(url, {
+    ...options,
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+}
 
 export async function createItem(formData: FormData) {
   const name = formData.get("name") as string;
   const description = (formData.get("description") as string) || null;
   const category = (formData.get("category") as string) || null;
-  const quantity = parseInt(formData.get("quantity") as string) || 1;
+  const quantity = parseInt(formData.get("quantity") as string, 10) || 1;
   const purchaseDateStr = formData.get("purchaseDate") as string;
   const purchaseDate = purchaseDateStr ? new Date(purchaseDateStr) : null;
   const valueStr = formData.get("value") as string;
@@ -57,7 +70,7 @@ export async function createItem(formData: FormData) {
               create: { name: tagName },
             });
             return { tagId: tag.id };
-          })
+          }),
         ),
       },
     },
@@ -74,7 +87,7 @@ export async function updateItem(id: string, formData: FormData) {
   const name = formData.get("name") as string;
   const description = (formData.get("description") as string) || null;
   const category = (formData.get("category") as string) || null;
-  const quantity = parseInt(formData.get("quantity") as string) || 1;
+  const quantity = parseInt(formData.get("quantity") as string, 10) || 1;
   const purchaseDateStr = formData.get("purchaseDate") as string;
   const purchaseDate = purchaseDateStr ? new Date(purchaseDateStr) : null;
   const valueStr = formData.get("value") as string;
@@ -86,7 +99,7 @@ export async function updateItem(id: string, formData: FormData) {
   const tagsStr = (formData.get("tags") as string) || "";
 
   // Handle photo upload
-  let photoPath: string | null | undefined = undefined;
+  let photoPath: string | null | undefined;
   const photo = formData.get("photo") as File;
   if (photo && photo.size > 0) {
     photoPath = await savePhoto(photo);
@@ -101,36 +114,40 @@ export async function updateItem(id: string, formData: FormData) {
     .map((t) => t.trim())
     .filter(Boolean);
 
-  // Remove existing tag associations
-  await prisma.tagOnItem.deleteMany({ where: { itemId: id } });
+  // Wrap tag delete + recreate in a transaction for atomicity
+  await prisma.$transaction(async (tx) => {
+    await tx.tagOnItem.deleteMany({ where: { itemId: id } });
 
-  await prisma.item.update({
-    where: { id },
-    data: {
-      name,
-      description,
-      category,
-      quantity,
-      purchaseDate,
-      value,
-      condition,
-      barcode,
-      location,
-      notes,
-      ...(photoPath !== undefined ? { photo: photoPath } : {}),
-      tags: {
-        create: await Promise.all(
-          tagNames.map(async (tagName) => {
-            const tag = await prisma.tag.upsert({
-              where: { name: tagName },
-              update: {},
-              create: { name: tagName },
-            });
-            return { tagId: tag.id };
-          })
-        ),
+    const tagConnections = await Promise.all(
+      tagNames.map(async (tagName) => {
+        const tag = await tx.tag.upsert({
+          where: { name: tagName },
+          update: {},
+          create: { name: tagName },
+        });
+        return { tagId: tag.id };
+      }),
+    );
+
+    await tx.item.update({
+      where: { id },
+      data: {
+        name,
+        description,
+        category,
+        quantity,
+        purchaseDate,
+        value,
+        condition,
+        barcode,
+        location,
+        notes,
+        ...(photoPath !== undefined ? { photo: photoPath } : {}),
+        tags: {
+          create: tagConnections,
+        },
       },
-    },
+    });
   });
 
   revalidatePath("/");
@@ -139,11 +156,9 @@ export async function updateItem(id: string, formData: FormData) {
 }
 
 export async function deleteItem(id: string) {
-  // Delete photo file if exists
   const item = await prisma.item.findUnique({ where: { id } });
   if (item?.photo) {
-    const filePath = path.join(process.cwd(), "public", item.photo);
-    await fs.unlink(filePath).catch(() => {});
+    await safeDeletePhoto(item.photo);
   }
 
   await prisma.item.delete({ where: { id } });
@@ -175,13 +190,28 @@ export async function searchItems(query: string) {
 }
 
 async function savePhoto(file: File): Promise<string> {
+  // Validate file type and size
+  if (!ALLOWED_UPLOAD_TYPES.has(file.type)) {
+    throw new Error(`Invalid file type: ${file.type}. Allowed: JPEG, PNG, WebP, GIF`);
+  }
+  if (file.size > MAX_UPLOAD_SIZE) {
+    throw new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max: 10MB`);
+  }
+
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
 
   const uploadDir = path.join(process.cwd(), "public", "uploads");
   await fs.mkdir(uploadDir, { recursive: true });
 
-  const ext = path.extname(file.name) || ".jpg";
+  // Force extension from MIME type (ignore user-provided filename)
+  const extMap: Record<string, string> = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+  };
+  const ext = extMap[file.type] ?? ".jpg";
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
   const filePath = path.join(uploadDir, filename);
 
@@ -202,7 +232,7 @@ async function enrichItem(itemId: string) {
   if (!item) return;
 
   try {
-    let enrichedData: {
+    const enrichedData: {
       description?: string;
       photo?: string;
       category?: string;
@@ -240,8 +270,8 @@ async function enrichItem(itemId: string) {
     // 2. Open Food Facts (for barcoded consumer goods)
     if (item.barcode && !enrichedData.description && !isModelKit) {
       try {
-        const res = await fetch(
-          `https://world.openfoodfacts.org/api/v0/product/${item.barcode}.json`
+        const res = await fetchWithTimeout(
+          `https://world.openfoodfacts.org/api/v0/product/${item.barcode}.json`,
         );
         const data = await res.json();
         if (data.status === 1 && data.product) {
@@ -269,8 +299,8 @@ async function enrichItem(itemId: string) {
       (item.barcode.length === 10 || item.barcode.length === 13)
     ) {
       try {
-        const res = await fetch(
-          `https://openlibrary.org/api/books?bibkeys=ISBN:${item.barcode}&format=json&jscmd=data`
+        const res = await fetchWithTimeout(
+          `https://openlibrary.org/api/books?bibkeys=ISBN:${item.barcode}&format=json&jscmd=data`,
         );
         const data = await res.json();
         const book = data[`ISBN:${item.barcode}`];
@@ -307,8 +337,7 @@ async function enrichItem(itemId: string) {
       where: { id: itemId },
       data: {
         ...enrichedData,
-        enrichStatus:
-          Object.keys(enrichedData).length > 0 ? "complete" : "failed",
+        enrichStatus: Object.keys(enrichedData).length > 0 ? "complete" : "failed",
       },
     });
   } catch {
@@ -358,7 +387,7 @@ function looksLikeModelKit(item: {
 
 async function scrapeHLJ(
   name: string,
-  barcode: string | null
+  barcode: string | null,
 ): Promise<{
   description?: string;
   category?: string;
@@ -371,7 +400,7 @@ async function scrapeHLJ(
     const query = barcode || name;
     const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`site:hlj.com ${query}`)}`;
 
-    const searchRes = await fetch(ddgUrl, {
+    const searchRes = await fetchWithTimeout(ddgUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
         Accept: "text/html",
@@ -385,9 +414,7 @@ async function scrapeHLJ(
 
     // Extract HLJ product URLs from DuckDuckGo results
     // DDG encodes URLs as: uddg=https%3A%2F%2Fwww.hlj.com%2Fproduct-slug-SKUCODE
-    const urlMatches = searchHtml.matchAll(
-      /uddg=(https%3A%2F%2Fwww\.hlj\.com%2F[a-z0-9%\-]+)/gi
-    );
+    const urlMatches = searchHtml.matchAll(/uddg=(https%3A%2F%2Fwww\.hlj\.com%2F[a-z0-9%-]+)/gi);
     let productUrl: string | null = null;
     for (const match of urlMatches) {
       const decoded = decodeURIComponent(match[1]);
@@ -408,7 +435,7 @@ async function scrapeHLJ(
     }
 
     // Step 2: Fetch the product page directly (WAF doesn't block these)
-    const productRes = await fetch(productUrl, {
+    const productRes = await fetchWithTimeout(productUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
         Accept: "text/html",
@@ -426,7 +453,7 @@ async function scrapeHLJ(
 
 function parseHLJProductPage(
   html: string,
-  url: string
+  url: string,
 ): {
   description?: string;
   category?: string;
@@ -437,37 +464,23 @@ function parseHLJProductPage(
   try {
     // Extract product data from dataLayer script
     const dataLayerMatch = html.match(
-      /window\.dataLayer\.push\(\{[\s\S]*?products:\s*\[\s*(\{[\s\S]*?\})\s*\]/
+      /window\.dataLayer\.push\(\{[\s\S]*?products:\s*\[\s*(\{[\s\S]*?\})\s*\]/,
     );
     if (!dataLayerMatch) return null;
 
-    // Parse the product JSON (it may have single quotes or HTML entities)
-    let productJson = dataLayerMatch[1];
-    productJson = productJson
-      .replace(/\\'/g, "'")
-      .replace(/'/g, '"')
-      .replace(/,\s*}/g, "}");
+    const raw = dataLayerMatch[1];
 
-    let product: Record<string, unknown>;
-    try {
-      product = JSON.parse(productJson);
-    } catch {
-      const nameMatch = productJson.match(/"name":\s*"([^"]+)"/);
-      const priceMatch = productJson.match(/"price":\s*(\d+)/);
-      const descMatch = productJson.match(/"meta_description":\s*"([^"]+)"/);
-      const categoryMatch = productJson.match(/"category":\s*"([^"]+)"/);
-      const skuMatch = productJson.match(/"sku":\s*"([^"]+)"/);
-
-      product = {
-        name: nameMatch?.[1],
-        price: priceMatch ? parseInt(priceMatch[1]) : undefined,
-        meta_description: descMatch?.[1],
-        category: categoryMatch?.[1],
-        sku: skuMatch?.[1],
-      };
+    // Parse HLJ dataLayer: it uses double-quoted keys/values in practice.
+    // Use regex extraction which safely handles apostrophes in values.
+    function extractString(key: string): string | undefined {
+      const m = raw.match(new RegExp(`"${key}":\\s*"([^"]*)"`, "i"));
+      return m?.[1];
+    }
+    function extractNumber(key: string): number | undefined {
+      const m = raw.match(new RegExp(`"${key}":\\s*(\\d+(?:\\.\\d+)?)`, "i"));
+      return m ? parseFloat(m[1]) : undefined;
     }
 
-    const sku = product.sku as string | undefined;
     const result: {
       description?: string;
       category?: string;
@@ -476,16 +489,19 @@ function parseHLJProductPage(
       url: string;
     } = { url };
 
-    if (product.meta_description) {
-      result.description = product.meta_description as string;
-    }
-    if (product.category) {
-      result.category = product.category as string;
-    }
-    if (product.price && typeof product.price === "number") {
-      result.price = Math.round((product.price / 150) * 100) / 100;
+    const metaDesc = extractString("meta_description");
+    if (metaDesc) result.description = metaDesc;
+
+    const category = extractString("category");
+    if (category) result.category = category;
+
+    const price = extractNumber("price");
+    if (price && price > 0) {
+      // HLJ prices are in JPY — approximate USD conversion
+      result.price = Math.round((price / 150) * 100) / 100;
     }
 
+    const sku = extractString("sku");
     if (sku) {
       const lowerSku = sku.toLowerCase();
       result.imageUrl = `https://www.hlj.com/images/prm/${lowerSku}/${lowerSku}prm1.jpg`;
@@ -503,16 +519,16 @@ function parseHLJProductPage(
 
 async function searchEbayPrice(
   name: string,
-  barcode: string | null
+  barcode: string | null,
 ): Promise<{ price: number; source: string; url: string } | null> {
   // 1. Try UPCitemdb.com (free barcode lookup with pricing)
   if (barcode) {
     try {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         `https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`,
         {
           headers: { Accept: "application/json" },
-        }
+        },
       );
       if (res.ok) {
         const data = await res.json();
@@ -522,9 +538,7 @@ async function searchEbayPrice(
             link?: string;
             merchant?: string;
           }[];
-          const prices = offers
-            .filter((o) => o.price && o.price > 0)
-            .map((o) => o.price as number);
+          const prices = offers.filter((o) => o.price && o.price > 0).map((o) => o.price as number);
           if (prices.length > 0) {
             prices.sort((a, b) => a - b);
             const median = prices[Math.floor(prices.length / 2)];
@@ -546,7 +560,7 @@ async function searchEbayPrice(
     const query = barcode || name;
     const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`site:ebay.com "${query}" buy it now`)}`;
 
-    const res = await fetch(ddgUrl, {
+    const res = await fetchWithTimeout(ddgUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
         Accept: "text/html",
@@ -583,27 +597,52 @@ async function searchEbayPrice(
   const query = barcode || name;
   const ebayUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_BIN=1`;
   console.log(
-    `[enrichment] Automated price lookup failed for "${name}". Manual eBay search: ${ebayUrl}`
+    `[enrichment] Automated price lookup failed for "${name}". Manual eBay search: ${ebayUrl}`,
   );
   return null;
 }
 
 async function downloadImage(url: string): Promise<string | null> {
+  const extMap: Record<string, string> = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+  };
+
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; Backlogr/1.0; catalog app)",
+        "User-Agent": "Mozilla/5.0 (compatible; Backlogr/1.0; catalog app)",
       },
     });
     if (!res.ok) return null;
 
+    // Validate content type
+    const contentType = res.headers.get("content-type")?.split(";")[0].trim();
+    if (!contentType || !ALLOWED_UPLOAD_TYPES.has(contentType)) {
+      console.warn(`[enrichment] Invalid image content-type (${contentType}): ${url}`);
+      return null;
+    }
+
+    // Guard against oversized downloads
+    const contentLength = res.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > MAX_IMAGE_DOWNLOAD_SIZE) {
+      console.warn(`[enrichment] Image too large (${contentLength} bytes): ${url}`);
+      return null;
+    }
+
     const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length > MAX_IMAGE_DOWNLOAD_SIZE) {
+      console.warn(`[enrichment] Downloaded image too large (${buffer.length} bytes): ${url}`);
+      return null;
+    }
+
     const uploadDir = path.join(process.cwd(), "public", "uploads");
     await fs.mkdir(uploadDir, { recursive: true });
 
-    const ext =
-      path.extname(new URL(url).pathname).split("?")[0] || ".jpg";
+    // Derive extension from content-type, not URL
+    const ext = extMap[contentType] ?? ".jpg";
     const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
     const filePath = path.join(uploadDir, filename);
 

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { type NextRequest, NextResponse } from "next/server";
 import { triggerEnrichment } from "@/lib/actions";
+import { prisma } from "@/lib/db";
+import { resolveTagConnections } from "@/lib/tags";
 
 // GET /api/items — list all items, optionally filtered by ?q=
 export async function GET(request: NextRequest) {
@@ -35,78 +36,60 @@ export async function GET(request: NextRequest) {
 
 // POST /api/items — create a new item
 export async function POST(request: NextRequest) {
+  let body: Record<string, unknown>;
   try {
-    const body = await request.json();
-    const {
-      name,
-      description,
-      category,
-      quantity,
-      purchaseDate,
-      value,
-      condition,
-      barcode,
-      location,
-      notes,
-      photo,
-      tags: tagNames,
-    } = body;
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-    if (!name || typeof name !== "string") {
-      return NextResponse.json(
-        { error: "name is required" },
-        { status: 400 }
-      );
-    }
+  const {
+    name,
+    description,
+    category,
+    quantity,
+    purchaseDate,
+    value,
+    condition,
+    barcode,
+    location,
+    notes,
+    photo,
+    tags: tagNames,
+  } = body;
 
+  if (!name || typeof name !== "string" || !String(name).trim()) {
+    return NextResponse.json({ error: "name is required" }, { status: 400 });
+  }
+
+  try {
     const item = await prisma.item.create({
       data: {
-        name,
-        description: description ?? null,
-        category: category ?? null,
-        quantity: quantity ?? 1,
-        purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
-        value: value != null ? parseFloat(value) : null,
-        condition: condition ?? null,
-        barcode: barcode ?? null,
-        location: location ?? null,
-        notes: notes ?? null,
-        photo: photo ?? null,
+        name: String(name).trim(),
+        description: (description as string) ?? null,
+        category: (category as string) ?? null,
+        quantity: typeof quantity === "number" ? quantity : 1,
+        purchaseDate: purchaseDate ? new Date(purchaseDate as string) : null,
+        value: value != null ? Number.parseFloat(String(value)) : null,
+        condition: (condition as string) ?? null,
+        barcode: (barcode as string) ?? null,
+        location: (location as string) ?? null,
+        notes: (notes as string) ?? null,
+        photo: (photo as string) ?? null,
         enrichStatus: barcode || name ? "pending" : "none",
         tags: {
-          create: await resolveTagConnections(tagNames),
+          create: await resolveTagConnections(tagNames as string[]),
         },
       },
       include: { tags: { include: { tag: true } } },
     });
 
-    // Trigger enrichment in background
+    // Trigger enrichment in background (fire and forget)
     triggerEnrichment(item.id).catch(console.error);
 
     return NextResponse.json(item, { status: 201 });
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid request body" },
-      { status: 400 }
-    );
+  } catch (err) {
+    console.error("Failed to create item:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-}
-
-async function resolveTagConnections(
-  tagNames?: string[]
-): Promise<{ tagId: string }[]> {
-  if (!tagNames || !Array.isArray(tagNames)) return [];
-  return Promise.all(
-    tagNames
-      .map((t) => (typeof t === "string" ? t.trim() : ""))
-      .filter(Boolean)
-      .map(async (name) => {
-        const tag = await prisma.tag.upsert({
-          where: { name },
-          update: {},
-          create: { name },
-        });
-        return { tagId: tag.id };
-      })
-  );
 }

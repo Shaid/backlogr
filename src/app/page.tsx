@@ -1,10 +1,10 @@
-import { Suspense } from "react";
-import { prisma } from "@/lib/db";
-import { SearchBar } from "@/components/search-bar";
-import { ItemCard } from "@/components/item-card";
-import { Button } from "@/components/ui/button";
 import { PackageOpen, Plus } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
+import { ItemCard } from "@/components/item-card";
+import { SearchBar } from "@/components/search-bar";
+import { Button } from "@/components/ui/button";
+import { prisma } from "@/lib/db";
 
 export default async function HomePage({
   searchParams,
@@ -64,9 +64,7 @@ export default async function HomePage({
           <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-muted mb-6">
             <PackageOpen className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h2 className="text-lg font-semibold mb-1">
-            {q ? "No items found" : "No items yet"}
-          </h2>
+          <h2 className="text-lg font-semibold mb-1">{q ? "No items found" : "No items yet"}</h2>
           <p className="text-sm text-muted-foreground mb-6 max-w-sm">
             {q
               ? "Try a different search term or clear your search."

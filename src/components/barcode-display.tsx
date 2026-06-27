@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import JsBarcode from "jsbarcode";
+import { useEffect, useRef } from "react";
 
 export function BarcodeDisplay({ value }: { value: string }) {
   const svgRef = useRef<SVGSVGElement>(null);

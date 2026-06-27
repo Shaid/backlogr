@@ -1,7 +1,7 @@
+import { MapPin, Package } from "lucide-react";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Package, MapPin } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import type { ItemWithTags } from "@/types";
 
 export function ItemCard({ item }: { item: ItemWithTags }) {
@@ -27,15 +27,13 @@ export function ItemCard({ item }: { item: ItemWithTags }) {
               {item.name}
             </h3>
             {item.category && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {item.category}
-              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">{item.category}</p>
             )}
           </div>
 
           {item.description && (
             <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-              {item.description}
+              {item.description.replace(/[#*`[\]_~>]+/g, "").replace(/\n/g, " ")}
             </p>
           )}
 
@@ -51,10 +49,7 @@ export function ItemCard({ item }: { item: ItemWithTags }) {
                 </Badge>
               ))}
               {item.tags.length > 3 && (
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] px-1.5 py-0 h-5 font-normal"
-                >
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal">
                   +{item.tags.length - 3}
                 </Badge>
               )}
@@ -71,9 +66,7 @@ export function ItemCard({ item }: { item: ItemWithTags }) {
               <span />
             )}
             {item.value != null && (
-              <span className="font-medium text-foreground">
-                ${item.value.toFixed(2)}
-              </span>
+              <span className="font-medium text-foreground">${item.value.toFixed(2)}</span>
             )}
           </div>
         </CardContent>

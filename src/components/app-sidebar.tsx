@@ -1,5 +1,8 @@
 "use client";
 
+import { Home, Package, Plus } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Sidebar,
   SidebarContent,
@@ -13,13 +16,6 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import {
-  Package,
-  Plus,
-  Home,
-} from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 const navItems = [
   { title: "All Items", href: "/", icon: Home },
@@ -39,9 +35,7 @@ export function AppSidebar() {
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-primary-foreground shrink-0">
             <Package className="w-4.5 h-4.5" />
           </div>
-          <span className="group-data-[collapsible=icon]:hidden">
-            Backlogr
-          </span>
+          <span className="group-data-[collapsible=icon]:hidden">Backlogr</span>
         </Link>
       </SidebarHeader>
 
@@ -54,11 +48,7 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     render={<Link href={item.href} />}
-                    isActive={
-                      item.href === "/"
-                        ? pathname === "/"
-                        : pathname.startsWith(item.href)
-                    }
+                    isActive={item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)}
                     tooltip={item.title}
                   >
                     <item.icon />

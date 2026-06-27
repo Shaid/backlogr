@@ -1,9 +1,9 @@
 "use client";
 
+import { ImagePlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ImagePlus, X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import type { ItemWithTags } from "@/types";
 
 const CONDITIONS = ["New", "Like New", "Good", "Fair", "Poor"];
@@ -96,9 +96,7 @@ export function ItemForm({
                 name="purchaseDate"
                 type="date"
                 defaultValue={
-                  item?.purchaseDate
-                    ? new Date(item.purchaseDate).toISOString().split("T")[0]
-                    : ""
+                  item?.purchaseDate ? new Date(item.purchaseDate).toISOString().split("T")[0] : ""
                 }
               />
             </div>
@@ -172,12 +170,7 @@ export function ItemForm({
                   className="w-28 h-28 object-cover rounded-xl border border-border"
                 />
                 <label className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-                  <input
-                    type="checkbox"
-                    name="removePhoto"
-                    value="true"
-                    className="rounded"
-                  />
+                  <input type="checkbox" name="removePhoto" value="true" className="rounded" />
                   Remove photo
                 </label>
               </div>
@@ -189,27 +182,17 @@ export function ItemForm({
               <ImagePlus className="w-5 h-5" />
               <span>Click to upload a photo</span>
             </label>
-            <Input
-              id="photo"
-              name="photo"
-              type="file"
-              accept="image/*"
-              className="hidden"
-            />
+            <Input id="photo" name="photo" type="file" accept="image/*" className="hidden" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="tags">Tags</Label>
             <Input
               id="tags"
               name="tags"
-              defaultValue={
-                item?.tags.map((t) => t.tag.name).join(", ") || ""
-              }
+              defaultValue={item?.tags.map((t) => t.tag.name).join(", ") || ""}
               placeholder="Separate tags with commas, e.g. electronics, warranty"
             />
-            <p className="text-xs text-muted-foreground">
-              Comma-separated list of tags
-            </p>
+            <p className="text-xs text-muted-foreground">Comma-separated list of tags</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
