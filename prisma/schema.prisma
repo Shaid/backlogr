@@ -21,6 +21,9 @@ model Item {
   location     String?
   notes        String?
   enrichStatus String   @default("none") // none, pending, complete, failed
+  marketPrice  Float?   // estimated market price from eBay/Amazon
+  priceSource  String?  // where the market price came from
+  sourceUrl    String?  // link to source product page (e.g. HLJ)
 
   tags      TagOnItem[]
 

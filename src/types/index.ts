@@ -12,6 +12,9 @@ export type Item = {
   location: string | null;
   notes: string | null;
   enrichStatus: string;
+  marketPrice: number | null;
+  priceSource: string | null;
+  sourceUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 };

@@ -15,9 +15,12 @@ import {
   Layers,
   Sparkles,
   Loader2,
+  TrendingUp,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import { DeleteButton } from "./delete-button";
+import { BarcodeDisplay } from "@/components/barcode-display";
 
 export default async function ItemDetailPage({
   params,
@@ -131,14 +134,6 @@ export default async function ItemDetailPage({
             value={new Date(item.purchaseDate).toLocaleDateString()}
           />
         )}
-        {item.barcode && (
-          <MetaField
-            icon={<Barcode className="w-4 h-4" />}
-            label="Barcode"
-            value={item.barcode}
-            mono
-          />
-        )}
         {item.location && (
           <MetaField
             icon={<MapPin className="w-4 h-4" />}
@@ -146,7 +141,44 @@ export default async function ItemDetailPage({
             value={item.location}
           />
         )}
+        {item.marketPrice != null && (
+          <MetaField
+            icon={<TrendingUp className="w-4 h-4" />}
+            label="Market Price"
+            value={`$${item.marketPrice.toFixed(2)}`}
+          />
+        )}
       </div>
+
+      {/* Market price source */}
+      {item.priceSource && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Price via {item.priceSource}</span>
+          {item.sourceUrl && (
+            <a
+              href={item.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              View source <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Barcode */}
+      {item.barcode && (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-muted-foreground">Barcode</p>
+            <div className="flex justify-center rounded-xl bg-muted/40 p-4">
+              <BarcodeDisplay value={item.barcode} />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Tags */}
       {item.tags.length > 0 && (
