@@ -2,6 +2,9 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/db";
 import { SearchBar } from "@/components/search-bar";
 import { ItemCard } from "@/components/item-card";
+import { Button } from "@/components/ui/button";
+import { PackageOpen, Plus } from "lucide-react";
+import Link from "next/link";
 
 export default async function HomePage({
   searchParams,
@@ -38,24 +41,50 @@ export default async function HomePage({
 
   return (
     <div className="space-y-6">
-      <Suspense>
-        <SearchBar />
-      </Suspense>
+      <div className="flex items-center gap-3">
+        <Suspense>
+          <SearchBar />
+        </Suspense>
+      </div>
 
       {q && (
-        <p className="text-sm text-muted-foreground">
-          {items.length} result{items.length !== 1 ? "s" : ""} for &ldquo;{q}&rdquo;
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            {items.length} result{items.length !== 1 ? "s" : ""} for &ldquo;
+            <span className="font-medium text-foreground">{q}</span>&rdquo;
+          </p>
+          <Link href="/">
+            <Button variant="ghost" size="sm" className="text-xs">
+              Clear search
+            </Button>
+          </Link>
+        </div>
       )}
 
       {items.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-muted-foreground text-lg">
-            {q ? "No items found." : "No items yet. Add your first item!"}
+        <div className="flex flex-col items-center justify-center py-20 sm:py-28 text-center">
+          <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-muted mb-6">
+            <PackageOpen className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <h2 className="text-lg font-semibold mb-1">
+            {q ? "No items found" : "No items yet"}
+          </h2>
+          <p className="text-sm text-muted-foreground mb-6 max-w-sm">
+            {q
+              ? "Try a different search term or clear your search."
+              : "Start cataloging your belongings by adding your first item."}
           </p>
+          {!q && (
+            <Link href="/items/new">
+              <Button className="gap-1.5">
+                <Plus className="w-4 h-4" />
+                Add your first item
+              </Button>
+            </Link>
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
           {items.map((item) => (
             <ItemCard key={item.id} item={item} />
           ))}
@@ -64,4 +93,3 @@ export default async function HomePage({
     </div>
   );
 }
-

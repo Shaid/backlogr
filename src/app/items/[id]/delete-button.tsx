@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
 export function DeleteButton({
@@ -22,7 +23,8 @@ export function DeleteButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger>
-        <Button variant="destructive" size="sm">
+        <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30">
+          <Trash2 className="w-3.5 h-3.5" />
           Delete
         </Button>
       </DialogTrigger>
@@ -34,13 +36,13 @@ export function DeleteButton({
             undone.
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
           <form action={deleteAction}>
             <Button type="submit" variant="destructive">
-              Delete
+              Delete permanently
             </Button>
           </form>
         </DialogFooter>

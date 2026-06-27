@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ImagePlus, X } from "lucide-react";
 import type { ItemWithTags } from "@/types";
 
 const CONDITIONS = ["New", "Like New", "Good", "Fair", "Poor"];
@@ -26,34 +26,37 @@ export function ItemForm({
   submitLabel: string;
 }) {
   return (
-    <form action={action} className="space-y-6 max-w-2xl mx-auto">
-      <Card>
-        <CardHeader>
-          <CardTitle>Basic Info</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
+    <form action={action} className="space-y-8 max-w-2xl mx-auto pb-8">
+      {/* Basic Info */}
+      <section className="space-y-5">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+          Basic Info
+        </h2>
+        <div className="space-y-4">
+          <div className="space-y-2">
             <Label htmlFor="name">Name *</Label>
             <Input
               id="name"
               name="name"
               required
               defaultValue={item?.name || ""}
-              placeholder="Item name"
+              placeholder="What is this item?"
+              className="h-11"
             />
           </div>
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
               name="description"
               defaultValue={item?.description || ""}
-              placeholder="Describe the item..."
+              placeholder="Add any details about this item..."
               rows={3}
+              className="resize-none"
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
               <Input
                 id="category"
@@ -62,7 +65,7 @@ export function ItemForm({
                 placeholder="e.g. Electronics, Books"
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="quantity">Quantity</Label>
               <Input
                 id="quantity"
@@ -73,16 +76,19 @@ export function ItemForm({
               />
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="border-t border-border" />
+
+      {/* Details */}
+      <section className="space-y-5">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+          Details
+        </h2>
+        <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="purchaseDate">Purchase Date</Label>
               <Input
                 id="purchaseDate"
@@ -95,7 +101,7 @@ export function ItemForm({
                 }
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="value">Value ($)</Label>
               <Input
                 id="value"
@@ -109,12 +115,9 @@ export function ItemForm({
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="condition">Condition</Label>
-              <Select
-                name="condition"
-                defaultValue={item?.condition || ""}
-              >
+              <Select name="condition" defaultValue={item?.condition || ""}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select condition" />
                 </SelectTrigger>
@@ -127,17 +130,18 @@ export function ItemForm({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label htmlFor="barcode">Barcode (UPC/EAN/ISBN)</Label>
+            <div className="space-y-2">
+              <Label htmlFor="barcode">Barcode</Label>
               <Input
                 id="barcode"
                 name="barcode"
                 defaultValue={item?.barcode || ""}
-                placeholder="e.g. 9780134685991"
+                placeholder="UPC, EAN, or ISBN"
+                className="font-mono"
               />
             </div>
           </div>
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="location">Location / Room</Label>
             <Input
               id="location"
@@ -146,56 +150,81 @@ export function ItemForm({
               placeholder="e.g. Living Room, Garage"
             />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Photo & Tags</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
+      <div className="border-t border-border" />
+
+      {/* Photo & Tags */}
+      <section className="space-y-5">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+          Photo & Tags
+        </h2>
+        <div className="space-y-4">
+          <div className="space-y-2">
             <Label htmlFor="photo">Photo</Label>
             {item?.photo && (
-              <div className="mb-2">
+              <div className="relative inline-block mb-2">
                 <img
                   src={item.photo}
                   alt={item.name}
-                  className="w-32 h-32 object-cover rounded-md"
+                  className="w-28 h-28 object-cover rounded-xl border border-border"
                 />
-                <label className="flex items-center gap-2 mt-1 text-sm">
-                  <input type="checkbox" name="removePhoto" value="true" />
-                  Remove current photo
+                <label className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+                  <input
+                    type="checkbox"
+                    name="removePhoto"
+                    value="true"
+                    className="rounded"
+                  />
+                  Remove photo
                 </label>
               </div>
             )}
-            <Input id="photo" name="photo" type="file" accept="image/*" />
+            <label
+              htmlFor="photo"
+              className="flex items-center justify-center gap-2 w-full h-24 rounded-xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-muted/50 transition-all cursor-pointer text-sm text-muted-foreground"
+            >
+              <ImagePlus className="w-5 h-5" />
+              <span>Click to upload a photo</span>
+            </label>
+            <Input
+              id="photo"
+              name="photo"
+              type="file"
+              accept="image/*"
+              className="hidden"
+            />
           </div>
-          <div>
-            <Label htmlFor="tags">Tags (comma-separated)</Label>
+          <div className="space-y-2">
+            <Label htmlFor="tags">Tags</Label>
             <Input
               id="tags"
               name="tags"
               defaultValue={
                 item?.tags.map((t) => t.tag.name).join(", ") || ""
               }
-              placeholder="e.g. electronics, warranty, gift"
+              placeholder="Separate tags with commas, e.g. electronics, warranty"
             />
+            <p className="text-xs text-muted-foreground">
+              Comma-separated list of tags
+            </p>
           </div>
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
             <Textarea
               id="notes"
               name="notes"
               defaultValue={item?.notes || ""}
-              placeholder="Additional notes..."
+              placeholder="Any additional notes..."
               rows={3}
+              className="resize-none"
             />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
-      <Button type="submit" className="w-full h-12 text-base">
+      <Button type="submit" size="lg" className="w-full h-12 text-base font-medium">
         {submitLabel}
       </Button>
     </form>
