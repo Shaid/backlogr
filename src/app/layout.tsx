@@ -46,12 +46,10 @@ export default function RootLayout({
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="h-4" />
                 <div className="flex-1" />
-                <Link href="/items/new">
-                  <Button size="sm" className="gap-1.5 font-medium">
-                    <Plus className="w-4 h-4" />
-                    <span className="hidden sm:inline">Add Item</span>
-                  </Button>
-                </Link>
+                <Button render={<Link href="/items/new" />} size="sm" className="gap-1.5 font-medium">
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Add Item</span>
+                </Button>
               </header>
               <main className="flex-1 px-4 sm:px-6 py-6 sm:py-8">
                 {children}

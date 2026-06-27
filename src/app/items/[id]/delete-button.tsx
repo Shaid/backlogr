@@ -22,11 +22,9 @@ export function DeleteButton({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
-        <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30">
+      <DialogTrigger render={<Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30" />}>
           <Trash2 className="w-3.5 h-3.5" />
           Delete
-        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

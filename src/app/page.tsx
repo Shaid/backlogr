@@ -53,11 +53,9 @@ export default async function HomePage({
             {items.length} result{items.length !== 1 ? "s" : ""} for &ldquo;
             <span className="font-medium text-foreground">{q}</span>&rdquo;
           </p>
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="text-xs">
-              Clear search
-            </Button>
-          </Link>
+          <Button render={<Link href="/" />} variant="ghost" size="sm" className="text-xs">
+            Clear search
+          </Button>
         </div>
       )}
 
@@ -75,12 +73,10 @@ export default async function HomePage({
               : "Start cataloging your belongings by adding your first item."}
           </p>
           {!q && (
-            <Link href="/items/new">
-              <Button className="gap-1.5">
-                <Plus className="w-4 h-4" />
-                Add your first item
-              </Button>
-            </Link>
+            <Button render={<Link href="/items/new" />} className="gap-1.5">
+              <Plus className="w-4 h-4" />
+              Add your first item
+            </Button>
           )}
         </div>
       ) : (

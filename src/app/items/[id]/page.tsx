@@ -59,12 +59,10 @@ export default async function ItemDetailPage({
           )}
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href={`/items/${item.id}/edit`}>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Pencil className="w-3.5 h-3.5" />
-              Edit
-            </Button>
-          </Link>
+          <Button render={<Link href={`/items/${item.id}/edit`} />} variant="outline" size="sm" className="gap-1.5">
+            <Pencil className="w-3.5 h-3.5" />
+            Edit
+          </Button>
           <DeleteButton deleteAction={deleteWithId} />
         </div>
       </div>
