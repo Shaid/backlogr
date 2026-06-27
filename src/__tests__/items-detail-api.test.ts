@@ -28,6 +28,12 @@ jest.mock("@/lib/db", () => ({
   prisma: mockPrisma,
 }));
 
+const mockAuth = jest.fn();
+
+jest.mock("@/lib/auth", () => ({
+  auth: mockAuth,
+}));
+
 jest.mock("@/lib/tags", () => ({
   resolveTagConnections: jest.fn().mockResolvedValue([]),
 }));
@@ -62,6 +68,7 @@ const sampleItem = {
   location: "Office",
   notes: null,
   enrichStatus: "none",
+  userId: "user-1",
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
   images: [],
@@ -76,6 +83,14 @@ const sampleItem = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAuth.mockResolvedValue({
+    user: {
+      id: "user-1",
+      role: "editor",
+      name: "Editor",
+      email: "editor@example.com",
+    },
+  });
 });
 
 describe("GET /api/items/:id", () => {
@@ -244,5 +259,27 @@ describe("DELETE /api/items/:id", () => {
 
     const fs = require("node:fs/promises");
     expect(fs.unlink).toHaveBeenCalled();
+  });
+
+  it("returns 403 when owner edits someone else's item", async () => {
+    mockAuth.mockResolvedValue({
+      user: {
+        id: "user-2",
+        role: "owner",
+      },
+    });
+    mockPrisma.item.findUnique.mockResolvedValue(sampleItem);
+
+    const req = makeRequest("http://localhost:3000/api/items/test-id-1", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Updated Item" }),
+    });
+
+    const res = await PUT(req, makeParams("test-id-1"));
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.error).toBe("Forbidden");
   });
 });

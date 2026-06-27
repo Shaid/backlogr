@@ -2,8 +2,11 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { ItemForm } from "@/components/item-form";
 import { createItem } from "@/lib/actions";
+import { requirePermission } from "@/lib/authz";
 
-export default function NewItemPage() {
+export default async function NewItemPage() {
+  await requirePermission("create");
+
   return (
     <div className="max-w-2xl mx-auto py-2 sm:py-4">
       <Link

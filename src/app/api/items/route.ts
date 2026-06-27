@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { triggerEnrichment } from "@/lib/actions";
+import { authorizeApiRequest } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 import { normalizeApiImages } from "@/lib/item-images";
 import { itemWithRelationsInclude } from "@/lib/items";
@@ -7,6 +8,11 @@ import { resolveTagConnections } from "@/lib/tags";
 
 // GET /api/items — list all items, optionally filtered by ?q=
 export async function GET(request: NextRequest) {
+  const authorization = await authorizeApiRequest("read");
+  if (authorization instanceof NextResponse) {
+    return authorization;
+  }
+
   const q = request.nextUrl.searchParams.get("q");
 
   const items = q
@@ -38,6 +44,11 @@ export async function GET(request: NextRequest) {
 
 // POST /api/items — create a new item
 export async function POST(request: NextRequest) {
+  const authorization = await authorizeApiRequest("create");
+  if (authorization instanceof NextResponse) {
+    return authorization;
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await request.json();
@@ -79,6 +90,7 @@ export async function POST(request: NextRequest) {
         barcode: (barcode as string) ?? null,
         location: (location as string) ?? null,
         notes: (notes as string) ?? null,
+        userId: authorization.id,
         photo: normalizedImages.photo ?? (photo as string) ?? null,
         enrichStatus: barcode || name ? "pending" : "none",
         images: {

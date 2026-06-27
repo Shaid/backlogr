@@ -24,6 +24,12 @@ jest.mock("@/lib/db", () => ({
   prisma: mockPrisma,
 }));
 
+const mockAuth = jest.fn();
+
+jest.mock("@/lib/auth", () => ({
+  auth: mockAuth,
+}));
+
 jest.mock("@/lib/actions", () => ({
   triggerEnrichment: jest.fn().mockResolvedValue(undefined),
 }));
@@ -53,6 +59,7 @@ const sampleItem = {
   location: "Office",
   notes: null,
   enrichStatus: "none",
+  userId: "user-1",
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
   images: [],
@@ -67,6 +74,14 @@ const sampleItem = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAuth.mockResolvedValue({
+    user: {
+      id: "user-1",
+      role: "editor",
+      name: "Editor",
+      email: "editor@example.com",
+    },
+  });
 });
 
 describe("GET /api/items", () => {
@@ -136,6 +151,7 @@ describe("POST /api/items", () => {
     expect(res.status).toBe(201);
     expect(body.name).toBe("Test Item");
     expect(mockPrisma.item.create).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.item.create.mock.calls[0][0].data.userId).toBe("user-1");
   });
 
   it("creates an item with all fields", async () => {
@@ -227,5 +243,16 @@ describe("POST /api/items", () => {
     // resolveTagConnections receives the raw array — it handles trimming internally
     const { resolveTagConnections } = require("@/lib/tags");
     expect(resolveTagConnections).toHaveBeenCalledWith(["  clean  ", "", "  "]);
+  });
+
+  it("returns 401 when unauthenticated", async () => {
+    mockAuth.mockResolvedValue(null);
+
+    const req = makeRequest("http://localhost:3000/api/items");
+    const res = await GET(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(body.error).toBe("Authentication required");
   });
 });

@@ -12,14 +12,18 @@ export function SearchBar() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(searchParams.toString());
     if (query.trim()) params.set("q", query.trim());
+    else params.delete("q");
     router.push(`/?${params.toString()}`);
   }
 
   function handleClear() {
     setQuery("");
-    router.push("/");
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("q");
+    const queryString = params.toString();
+    router.push(queryString ? `/?${queryString}` : "/");
   }
 
   return (

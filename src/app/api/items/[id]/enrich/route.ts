@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { triggerEnrichment } from "@/lib/actions";
+import { authorizeApiRequest } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -7,6 +8,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   const item = await prisma.item.findUnique({ where: { id } });
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
+  }
+  const authorization = await authorizeApiRequest("update", item.userId);
+  if (authorization instanceof NextResponse) {
+    return authorization;
   }
 
   // Reset status to pending and trigger

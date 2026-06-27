@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ItemForm } from "@/components/item-form";
 import { updateItem } from "@/lib/actions";
+import { requirePermission } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 import { itemWithRelationsInclude } from "@/lib/items";
 
@@ -14,6 +15,7 @@ export default async function EditItemPage({ params }: { params: Promise<{ id: s
   });
 
   if (!item) notFound();
+  await requirePermission("update", item.userId);
 
   const updateWithId = updateItem.bind(null, item.id);
 

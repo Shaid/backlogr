@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authorizeApiRequest } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 import { itemWithRelationsInclude } from "@/lib/items";
 
@@ -14,6 +15,10 @@ export async function PUT(
 
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
+  }
+  const authorization = await authorizeApiRequest("update", item.userId);
+  if (authorization instanceof NextResponse) {
+    return authorization;
   }
 
   const image = item.images.find((entry) => entry.id === imageId);

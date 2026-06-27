@@ -20,11 +20,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { deleteItem } from "@/lib/actions";
+import { requireCurrentUser } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 import { itemWithRelationsInclude } from "@/lib/items";
+import { canPerform } from "@/lib/permissions";
 import { DeleteButton } from "./delete-button";
 
 export default async function ItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const user = await requireCurrentUser();
   const { id } = await params;
   const item = await prisma.item.findUnique({
     where: { id },
@@ -34,6 +37,8 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
   if (!item) notFound();
 
   const deleteWithId = deleteItem.bind(null, item.id);
+  const canEdit = canPerform(user.role, "update", item.userId ?? undefined, user.id);
+  const canDelete = canPerform(user.role, "delete", item.userId ?? undefined, user.id);
 
   return (
     <div className="max-w-2xl mx-auto py-2 sm:py-4 space-y-6">
@@ -52,18 +57,22 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">{item.name}</h1>
           {item.category && <p className="text-sm text-muted-foreground">{item.category}</p>}
         </div>
-        <div className="flex gap-2 shrink-0">
-          <Button
-            render={<Link href={`/items/${item.id}/edit`} />}
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            Edit
-          </Button>
-          <DeleteButton deleteAction={deleteWithId} />
-        </div>
+        {(canEdit || canDelete) && (
+          <div className="flex gap-2 shrink-0">
+            {canEdit && (
+              <Button
+                render={<Link href={`/items/${item.id}/edit`} />}
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Edit
+              </Button>
+            )}
+            {canDelete && <DeleteButton deleteAction={deleteWithId} />}
+          </div>
+        )}
       </div>
 
       {/* Enrichment status */}

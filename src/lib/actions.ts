@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireAdmin, requireCurrentUser, requirePermission } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 import {
   ALLOWED_UPLOAD_TYPES,
@@ -17,6 +18,9 @@ import {
   syncItemImagesFromFormData,
 } from "@/lib/item-images";
 import { itemWithRelationsInclude } from "@/lib/items";
+import type { Role } from "@/lib/permissions";
+
+const VALID_ROLES = new Set<Role>(["admin", "editor", "viewer", "owner"]);
 
 const FETCH_TIMEOUT_MS = 8_000;
 const MAX_IMAGE_DOWNLOAD_SIZE = 10 * 1024 * 1024; // 10MB
@@ -29,6 +33,7 @@ function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Respo
 }
 
 export async function createItem(formData: FormData) {
+  const user = await requirePermission("create");
   const name = formData.get("name") as string;
   const description = (formData.get("description") as string) || null;
   const category = (formData.get("category") as string) || null;
@@ -64,6 +69,7 @@ export async function createItem(formData: FormData) {
           barcode,
           location,
           notes,
+          userId: user.id,
           photo: imagePayload.photo,
           enrichStatus: barcode || name ? "pending" : "none",
           images: {
@@ -104,6 +110,7 @@ export async function updateItem(id: string, formData: FormData) {
   if (!existingItem) {
     throw new Error("Item not found");
   }
+  await requirePermission("update", existingItem.userId);
 
   const name = formData.get("name") as string;
   const description = (formData.get("description") as string) || null;
@@ -187,11 +194,15 @@ export async function deleteItem(id: string) {
     where: { id },
     include: { images: true },
   });
+  if (!item) {
+    throw new Error("Item not found");
+  }
+  await requirePermission("delete", item.userId);
   const imageUrls = new Set<string>();
-  if (item?.photo) {
+  if (item.photo) {
     imageUrls.add(item.photo);
   }
-  for (const image of item?.images ?? []) {
+  for (const image of item.images) {
     imageUrls.add(image.url);
   }
 
@@ -202,6 +213,8 @@ export async function deleteItem(id: string) {
 }
 
 export async function searchItems(query: string) {
+  await requireCurrentUser();
+
   return prisma.item.findMany({
     where: {
       OR: [
@@ -227,6 +240,22 @@ export async function searchItems(query: string) {
 // Exported wrapper for triggering enrichment from API routes
 export async function triggerEnrichment(itemId: string) {
   return enrichItem(itemId);
+}
+
+export async function updateUserRole(userId: string, formData: FormData) {
+  await requireAdmin();
+
+  const role = formData.get("role");
+  if (typeof role !== "string" || !VALID_ROLES.has(role as Role)) {
+    throw new Error("Invalid role");
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { role },
+  });
+
+  revalidatePath("/admin");
 }
 
 async function enrichItem(itemId: string) {

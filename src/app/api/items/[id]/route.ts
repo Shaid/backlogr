@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { authorizeApiRequest } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 import { safeDeletePhoto } from "@/lib/files";
 import { normalizeApiImages } from "@/lib/item-images";
@@ -7,6 +8,11 @@ import { resolveTagConnections } from "@/lib/tags";
 
 // GET /api/items/:id
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const authorization = await authorizeApiRequest("read");
+  if (authorization instanceof NextResponse) {
+    return authorization;
+  }
+
   const { id } = await params;
   const item = await prisma.item.findUnique({
     where: { id },
@@ -29,6 +35,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   });
   if (!existing) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
+  }
+  const authorization = await authorizeApiRequest("update", existing.userId);
+  if (authorization instanceof NextResponse) {
+    return authorization;
   }
 
   let body: Record<string, unknown>;
@@ -144,6 +154,10 @@ export async function DELETE(
   });
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
+  }
+  const authorization = await authorizeApiRequest("delete", item.userId);
+  if (authorization instanceof NextResponse) {
+    return authorization;
   }
 
   const imageUrls = new Set<string>();

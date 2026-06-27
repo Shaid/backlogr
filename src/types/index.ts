@@ -15,6 +15,7 @@ export type Item = {
   marketPrice: number | null;
   priceSource: string | null;
   sourceUrl: string | null;
+  userId: string | null;
   createdAt: Date;
   updatedAt: Date;
 };

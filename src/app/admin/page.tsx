@@ -1,5 +1,7 @@
-import { CheckCircle2, Clock, Loader2, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
+import { updateUserRole } from "@/lib/actions";
+import { requireAdmin } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 import { RetriggerButton } from "./retrigger-button";
 
@@ -18,6 +20,8 @@ const STATUS_CONFIG: Record<
 };
 
 export default async function AdminPage() {
+  await requireAdmin();
+
   const items = await prisma.item.findMany({
     select: {
       id: true,
@@ -31,6 +35,15 @@ export default async function AdminPage() {
       updatedAt: true,
     },
     orderBy: [{ enrichStatus: "asc" }, { updatedAt: "desc" }],
+  });
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+    },
+    orderBy: [{ role: "asc" }, { email: "asc" }],
   });
 
   const counts = {
@@ -70,6 +83,67 @@ export default async function AdminPage() {
             </div>
           );
         })}
+      </div>
+
+      <div className="rounded-xl border border-border overflow-hidden">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="font-semibold">User Access</h2>
+          <p className="text-sm text-muted-foreground">
+            Assign roles for catalog access and admin tools.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium">User</th>
+                <th className="px-4 py-3 text-left font-medium">Email</th>
+                <th className="px-4 py-3 text-left font-medium">Role</th>
+                <th className="px-4 py-3 text-left font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {users.map((user) => {
+                const updateRoleForUser = updateUserRole.bind(null, user.id);
+
+                return (
+                  <tr key={user.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3 font-medium">{user.name || "Unnamed user"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{user.email || "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{user.role}</td>
+                    <td className="px-4 py-3">
+                      <form action={updateRoleForUser} className="flex items-center gap-2">
+                        <select
+                          name="role"
+                          defaultValue={user.role}
+                          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          <option value="admin">admin</option>
+                          <option value="editor">editor</option>
+                          <option value="viewer">viewer</option>
+                          <option value="owner">owner</option>
+                        </select>
+                        <button
+                          type="submit"
+                          className="rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted"
+                        >
+                          Save
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                );
+              })}
+              {users.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
+                    No users have signed in yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Items table */}
