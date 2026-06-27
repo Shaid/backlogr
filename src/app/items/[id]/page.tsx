@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import { DeleteButton } from "./delete-button";
 import { BarcodeDisplay } from "@/components/barcode-display";
+import { Markdown } from "@/components/markdown";
 
 export default async function ItemDetailPage({
   params,
@@ -100,7 +101,7 @@ export default async function ItemDetailPage({
       {item.description && (
         <div className="space-y-1.5">
           <p className="text-sm font-medium text-muted-foreground">Description</p>
-          <p className="text-sm leading-relaxed">{item.description}</p>
+          <Markdown>{item.description}</Markdown>
         </div>
       )}
 
@@ -201,7 +202,7 @@ export default async function ItemDetailPage({
           <Separator />
           <div className="space-y-1.5">
             <p className="text-sm font-medium text-muted-foreground">Notes</p>
-            <p className="text-sm whitespace-pre-wrap leading-relaxed">{item.notes}</p>
+            <Markdown>{item.notes}</Markdown>
           </div>
         </>
       )}

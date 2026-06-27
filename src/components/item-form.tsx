@@ -54,6 +54,7 @@ export function ItemForm({
               rows={3}
               className="resize-none"
             />
+            <p className="text-xs text-muted-foreground">Supports Markdown</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -220,6 +221,7 @@ export function ItemForm({
               rows={3}
               className="resize-none"
             />
+            <p className="text-xs text-muted-foreground">Supports Markdown</p>
           </div>
         </div>
       </section>
