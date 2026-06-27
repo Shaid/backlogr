@@ -118,7 +118,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           ...(location !== undefined && { location: location as string | null }),
           ...(notes !== undefined && { notes: notes as string | null }),
           ...(normalizedPhoto !== undefined || Array.isArray(images)
-            ? { photo: normalizedImages.photo ?? (normalizedPhoto as string | null) }
+            ? { photo: normalizedImages.photo ?? null }
             : {}),
           ...(Array.isArray(images)
             ? {

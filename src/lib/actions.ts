@@ -657,13 +657,65 @@ async function searchEbayPrice(
   return null;
 }
 
+/** Block requests to private/reserved IP ranges (SSRF protection) */
+function isPrivateUrl(urlString: string): boolean {
+  try {
+    const parsed = new URL(urlString);
+    // Only allow http/https
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return true;
+    const hostname = parsed.hostname;
+    // Block obvious private/reserved hostnames
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname === "0.0.0.0" ||
+      hostname.endsWith(".local") ||
+      hostname.endsWith(".internal")
+    )
+      return true;
+    // Block private IP ranges
+    const parts = hostname.split(".").map(Number);
+    if (parts.length === 4 && parts.every((p) => !Number.isNaN(p))) {
+      if (parts[0] === 10) return true; // 10.0.0.0/8
+      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12
+      if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16
+      if (parts[0] === 169 && parts[1] === 254) return true; // link-local
+      if (parts[0] === 127) return true; // loopback
+      if (parts[0] === 0) return true; // 0.0.0.0/8
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 async function downloadImage(url: string): Promise<string | null> {
+  // SSRF protection: block private/reserved URLs
+  if (isPrivateUrl(url)) {
+    console.warn(`[enrichment] Blocked private/reserved URL: ${url}`);
+    return null;
+  }
+
   try {
     const res = await fetchWithTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; Backlogr/1.0; catalog app)",
       },
+      redirect: "manual",
     });
+
+    // Handle redirects manually to check destination
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("location");
+      if (!location || isPrivateUrl(new URL(location, url).href)) {
+        console.warn(`[enrichment] Blocked redirect to private URL from: ${url}`);
+        return null;
+      }
+      // Follow one level of redirect only
+      return downloadImage(new URL(location, url).href);
+    }
+
     if (!res.ok) return null;
 
     // Validate content type

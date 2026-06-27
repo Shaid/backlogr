@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
         location: (location as string) ?? null,
         notes: (notes as string) ?? null,
         userId: authorization.id,
-        photo: normalizedImages.photo ?? (photo as string) ?? null,
+        photo: normalizedImages.photo ?? null,
         enrichStatus: barcode || name ? "pending" : "none",
         images: {
           create: normalizedImages.images,
