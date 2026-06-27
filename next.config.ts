@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  allowedDevOrigins: ["jive-b028924.bom.gov.au"],
 };
 
 export default nextConfig;
