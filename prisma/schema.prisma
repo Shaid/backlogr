@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Item {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  category     String?
+  quantity     Int      @default(1)
+  purchaseDate DateTime?
+  value        Float?
+  condition    String?  // New, Like New, Good, Fair, Poor
+  photo        String?  // path to uploaded file
+  barcode      String?
+  location     String?
+  notes        String?
+  enrichStatus String   @default("none") // none, pending, complete, failed
+
+  tags      TagOnItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Tag {
+  id    String      @id @default(cuid())
+  name  String      @unique
+  items TagOnItem[]
+}
+
+model TagOnItem {
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tagId  String
+
+  @@id([itemId, tagId])
+}
