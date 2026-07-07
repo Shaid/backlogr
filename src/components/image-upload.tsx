@@ -16,11 +16,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LEGACY_IMAGE_TOKEN } from "@/lib/items";
 import { cn } from "@/lib/utils";
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const LEGACY_IMAGE_TOKEN = "legacy:photo";
 
 type ExistingImage = {
   id: string;

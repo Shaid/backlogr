@@ -1,7 +1,8 @@
 import type { Item, ItemImage, Prisma } from "@/generated/prisma/client";
 import { saveUploadedImages } from "@/lib/files";
+import { LEGACY_IMAGE_TOKEN } from "@/lib/items";
 
-export const LEGACY_IMAGE_TOKEN = "legacy:photo";
+export type { LEGACY_IMAGE_TOKEN };
 
 export type ItemWithImages = Pick<Item, "id" | "photo"> & {
   images: Pick<ItemImage, "id" | "url" | "isHero" | "sortOrder" | "createdAt">[];
