@@ -6,8 +6,9 @@ import { SearchBar } from "@/components/search-bar";
 import { Button } from "@/components/ui/button";
 import { requireCurrentUser } from "@/lib/authz";
 import { prisma } from "@/lib/db";
-import { itemWithRelationsInclude } from "@/lib/items";
+import { formatCurrency, itemWithRelationsInclude } from "@/lib/items";
 import { canPerform } from "@/lib/permissions";
+import { buildSearchWhere } from "@/lib/search";
 
 type SortKey = "name" | "category" | "condition" | "value" | "location" | "createdAt";
 type SortDirection = "asc" | "desc";
@@ -45,22 +46,7 @@ export default async function HomePage({
 
   const items = q
     ? await prisma.item.findMany({
-        where: {
-          OR: [
-            { name: { contains: q } },
-            { description: { contains: q } },
-            { category: { contains: q } },
-            { barcode: { contains: q } },
-            { location: { contains: q } },
-            {
-              tags: {
-                some: {
-                  tag: { name: { contains: q } },
-                },
-              },
-            },
-          ],
-        },
+        where: buildSearchWhere(q),
         include: itemWithRelationsInclude,
         orderBy: { updatedAt: "desc" },
       })
@@ -268,11 +254,4 @@ function normalizeSortValue(value: string | number | Date | null) {
   }
 
   return value;
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(value);
 }

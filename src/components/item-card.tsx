@@ -2,7 +2,7 @@ import { MapPin, Package } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { getItemDisplayImage } from "@/lib/items";
+import { formatCurrency, getItemDisplayImage } from "@/lib/items";
 import type { ItemWithTags } from "@/types";
 
 export function ItemCard({ item }: { item: ItemWithTags }) {
@@ -69,7 +69,7 @@ export function ItemCard({ item }: { item: ItemWithTags }) {
               <span />
             )}
             {item.value != null && (
-              <span className="font-medium text-foreground">${item.value.toFixed(2)}</span>
+              <span className="font-medium text-foreground">{formatCurrency(item.value)}</span>
             )}
           </div>
         </CardContent>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { updateUserRole } from "@/lib/actions";
 import { requireAdmin } from "@/lib/authz";
 import { prisma } from "@/lib/db";
+import { formatCurrency } from "@/lib/items";
 import { RetriggerButton } from "./retrigger-button";
 
 export const dynamic = "force-dynamic";
@@ -188,7 +189,7 @@ export default async function AdminPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {item.marketPrice != null ? `$${item.marketPrice.toFixed(2)}` : "—"}
+                      {item.marketPrice != null ? formatCurrency(item.marketPrice) : "—"}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">
                       {item.sourceUrl ? (

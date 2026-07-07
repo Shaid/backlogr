@@ -22,7 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { deleteItem } from "@/lib/actions";
 import { requireCurrentUser } from "@/lib/authz";
 import { prisma } from "@/lib/db";
-import { itemWithRelationsInclude } from "@/lib/items";
+import { formatCurrency, itemWithRelationsInclude } from "@/lib/items";
 import { canPerform } from "@/lib/permissions";
 import { DeleteButton } from "./delete-button";
 
@@ -117,7 +117,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
           <MetaField
             icon={<DollarSign className="w-4 h-4" />}
             label="Value"
-            value={`$${item.value.toFixed(2)}`}
+            value={formatCurrency(item.value)}
           />
         )}
         {item.purchaseDate && (
@@ -134,7 +134,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
           <MetaField
             icon={<TrendingUp className="w-4 h-4" />}
             label="Market Price"
-            value={`$${item.marketPrice.toFixed(2)}`}
+            value={formatCurrency(item.marketPrice)}
           />
         )}
       </div>
