@@ -4,6 +4,7 @@ import { authorizeApiRequest } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 import { normalizeApiImages } from "@/lib/item-images";
 import { itemWithRelationsInclude } from "@/lib/items";
+import { buildSearchWhere } from "@/lib/search";
 import { resolveTagConnections } from "@/lib/tags";
 
 // GET /api/items — list all items, optionally filtered by ?q=
@@ -17,20 +18,7 @@ export async function GET(request: NextRequest) {
 
   const items = q
     ? await prisma.item.findMany({
-        where: {
-          OR: [
-            { name: { contains: q } },
-            { description: { contains: q } },
-            { category: { contains: q } },
-            { barcode: { contains: q } },
-            { location: { contains: q } },
-            {
-              tags: {
-                some: { tag: { name: { contains: q } } },
-              },
-            },
-          ],
-        },
+        where: buildSearchWhere(q),
         include: itemWithRelationsInclude,
         orderBy: { updatedAt: "desc" },
       })
@@ -67,7 +55,6 @@ export async function POST(request: NextRequest) {
     barcode,
     location,
     notes,
-    photo,
     images,
     tags: tagNames,
   } = body;
@@ -103,7 +90,6 @@ export async function POST(request: NextRequest) {
       include: itemWithRelationsInclude,
     });
 
-    // Trigger enrichment in background (fire and forget)
     triggerEnrichment(item.id).catch(console.error);
 
     return NextResponse.json(item, { status: 201 });

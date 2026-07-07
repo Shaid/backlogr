@@ -1,45 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { authorizeApiRequest } from "@/lib/authz";
+import { authorizeItemRequest } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 import { safeDeletePhoto } from "@/lib/files";
 import { normalizeApiImages } from "@/lib/item-images";
-import { itemWithRelationsInclude } from "@/lib/items";
+import { collectItemImageUrls } from "@/lib/items";
 import { resolveTagConnections } from "@/lib/tags";
 
 // GET /api/items/:id
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const authorization = await authorizeApiRequest("read");
-  if (authorization instanceof NextResponse) {
-    return authorization;
-  }
-
   const { id } = await params;
-  const item = await prisma.item.findUnique({
-    where: { id },
-    include: itemWithRelationsInclude,
-  });
+  const result = await authorizeItemRequest(id, "read");
+  if (result.authorization) return result.authorization;
 
-  if (!item) {
-    return NextResponse.json({ error: "Item not found" }, { status: 404 });
-  }
-
-  return NextResponse.json(item);
+  return NextResponse.json(result.item);
 }
 
 // PUT /api/items/:id
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const existing = await prisma.item.findUnique({
-    where: { id },
-    include: { images: true },
-  });
-  if (!existing) {
-    return NextResponse.json({ error: "Item not found" }, { status: 404 });
-  }
-  const authorization = await authorizeApiRequest("update", existing.userId);
-  if (authorization instanceof NextResponse) {
-    return authorization;
-  }
+  const authResult = await authorizeItemRequest(id, "update");
+  if (authResult.authorization) return authResult.authorization;
+  const existing = authResult.item!;
 
   let body: Record<string, unknown>;
   try {
@@ -64,14 +45,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     tags: tagNames,
   } = body;
 
-  // Normalize empty string photo to null
   const normalizedPhoto = photo === "" ? null : photo;
 
   try {
     const normalizedImages = await normalizeApiImages(images);
     const deletedImageUrls: string[] = [];
 
-    // Wrap tag delete + recreate in a transaction for atomicity
     const item = await prisma.$transaction(async (tx) => {
       await tx.tagOnItem.deleteMany({ where: { itemId: id } });
       const tagConnections = await resolveTagConnections(tagNames as string[], tx);
@@ -129,7 +108,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             : {}),
           tags: { create: tagConnections },
         },
-        include: itemWithRelationsInclude,
+        include: {
+          tags: { include: { tag: true } },
+          images: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+        },
       });
     });
 
@@ -148,25 +130,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const item = await prisma.item.findUnique({
-    where: { id },
-    include: { images: true },
-  });
-  if (!item) {
-    return NextResponse.json({ error: "Item not found" }, { status: 404 });
-  }
-  const authorization = await authorizeApiRequest("delete", item.userId);
-  if (authorization instanceof NextResponse) {
-    return authorization;
-  }
+  const authResult = await authorizeItemRequest(id, "delete");
+  if (authResult.authorization) return authResult.authorization;
+  const item = authResult.item!;
 
-  const imageUrls = new Set<string>();
-  if (item.photo) {
-    imageUrls.add(item.photo);
-  }
-  for (const image of item.images) {
-    imageUrls.add(image.url);
-  }
+  const imageUrls = collectItemImageUrls(item);
 
   await prisma.item.delete({ where: { id } });
   await Promise.all([...imageUrls].map((imageUrl) => safeDeletePhoto(imageUrl)));

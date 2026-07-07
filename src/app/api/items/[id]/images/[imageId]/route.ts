@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authorizeApiRequest } from "@/lib/authz";
+import { authorizeItemRequest } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 import { safeDeletePhoto } from "@/lib/files";
 
@@ -8,18 +8,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; imageId: string }> },
 ) {
   const { id, imageId } = await params;
-  const item = await prisma.item.findUnique({
-    where: { id },
-    include: { images: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } },
-  });
-
-  if (!item) {
-    return NextResponse.json({ error: "Item not found" }, { status: 404 });
-  }
-  const authorization = await authorizeApiRequest("update", item.userId);
-  if (authorization instanceof NextResponse) {
-    return authorization;
-  }
+  const authResult = await authorizeItemRequest(id, "update");
+  if (authResult.authorization) return authResult.authorization;
+  const item = authResult.item!;
 
   const image = item.images.find((entry) => entry.id === imageId);
   if (!image) {
