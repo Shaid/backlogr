@@ -43,8 +43,21 @@ jest.mock("node:fs/promises", () => ({
   unlink: jest.fn().mockResolvedValue(undefined),
 }));
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { DELETE, GET, PUT } from "@/app/api/items/[id]/route";
+import { authorizeItemRequest } from "@/lib/authz";
+
+jest.mock("@/lib/authz", () => {
+  const actual = jest.requireActual("@/lib/authz");
+  return {
+    ...actual,
+    authorizeItemRequest: jest.fn(),
+  };
+});
+
+const mockAuthorizeItemRequest = authorizeItemRequest as jest.MockedFunction<
+  typeof authorizeItemRequest
+>;
 
 function makeRequest(url: string, init?: RequestInit) {
   return new NextRequest(new URL(url, "http://localhost:3000"), init as never);
@@ -68,6 +81,9 @@ const sampleItem = {
   location: "Office",
   notes: null,
   enrichStatus: "none",
+  marketPrice: null,
+  priceSource: null,
+  sourceUrl: null,
   userId: "user-1",
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
@@ -91,14 +107,16 @@ beforeEach(() => {
       email: "editor@example.com",
     },
   });
+  mockAuthorizeItemRequest.mockResolvedValue({
+    item: sampleItem,
+    authorization: null,
+  } as any);
 });
 
 describe("GET /api/items/:id", () => {
   it("returns the item when found", async () => {
-    mockPrisma.item.findUnique.mockResolvedValue(sampleItem);
-
     const req = makeRequest("http://localhost:3000/api/items/test-id-1");
-    const res = await GET(req, makeParams("test-id-1"));
+    const res = (await GET(req, makeParams("test-id-1"))) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -107,10 +125,13 @@ describe("GET /api/items/:id", () => {
   });
 
   it("returns 404 when item not found", async () => {
-    mockPrisma.item.findUnique.mockResolvedValue(null);
+    mockAuthorizeItemRequest.mockResolvedValue({
+      item: null,
+      authorization: NextResponse.json({ error: "Item not found" }, { status: 404 }),
+    });
 
     const req = makeRequest("http://localhost:3000/api/items/nonexistent");
-    const res = await GET(req, makeParams("nonexistent"));
+    const res = (await GET(req, makeParams("nonexistent"))) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(404);
@@ -120,7 +141,6 @@ describe("GET /api/items/:id", () => {
 
 describe("PUT /api/items/:id", () => {
   it("updates an existing item", async () => {
-    mockPrisma.item.findUnique.mockResolvedValue(sampleItem);
     mockPrisma.tagOnItem.deleteMany.mockResolvedValue({ count: 1 });
     mockPrisma.item.update.mockResolvedValue({
       ...sampleItem,
@@ -134,7 +154,7 @@ describe("PUT /api/items/:id", () => {
       body: JSON.stringify({ name: "Updated Item" }),
     });
 
-    const res = await PUT(req, makeParams("test-id-1"));
+    const res = (await PUT(req, makeParams("test-id-1"))) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -145,7 +165,10 @@ describe("PUT /api/items/:id", () => {
   });
 
   it("returns 404 when updating nonexistent item", async () => {
-    mockPrisma.item.findUnique.mockResolvedValue(null);
+    mockAuthorizeItemRequest.mockResolvedValue({
+      item: null,
+      authorization: NextResponse.json({ error: "Item not found" }, { status: 404 }),
+    });
 
     const req = makeRequest("http://localhost:3000/api/items/nonexistent", {
       method: "PUT",
@@ -153,7 +176,7 @@ describe("PUT /api/items/:id", () => {
       body: JSON.stringify({ name: "Nope" }),
     });
 
-    const res = await PUT(req, makeParams("nonexistent"));
+    const res = (await PUT(req, makeParams("nonexistent"))) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(404);
@@ -161,7 +184,6 @@ describe("PUT /api/items/:id", () => {
   });
 
   it("updates tags by removing old and adding new", async () => {
-    mockPrisma.item.findUnique.mockResolvedValue(sampleItem);
     mockPrisma.tagOnItem.deleteMany.mockResolvedValue({ count: 1 });
     mockPrisma.item.update.mockResolvedValue({
       ...sampleItem,
@@ -180,7 +202,7 @@ describe("PUT /api/items/:id", () => {
       body: JSON.stringify({ tags: ["new-tag"] }),
     });
 
-    const res = await PUT(req, makeParams("test-id-1"));
+    const res = (await PUT(req, makeParams("test-id-1"))) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -190,7 +212,6 @@ describe("PUT /api/items/:id", () => {
   });
 
   it("only updates provided fields (partial update)", async () => {
-    mockPrisma.item.findUnique.mockResolvedValue(sampleItem);
     mockPrisma.tagOnItem.deleteMany.mockResolvedValue({ count: 0 });
     mockPrisma.item.update.mockResolvedValue({
       ...sampleItem,
@@ -206,7 +227,6 @@ describe("PUT /api/items/:id", () => {
     await PUT(req, makeParams("test-id-1"));
 
     const updateCall = mockPrisma.item.update.mock.calls[0][0];
-    // name should not be in the data since it wasn't provided
     expect(updateCall.data.name).toBeUndefined();
     expect(updateCall.data.value).toBe(99.99);
   });
@@ -214,14 +234,13 @@ describe("PUT /api/items/:id", () => {
 
 describe("DELETE /api/items/:id", () => {
   it("deletes an existing item", async () => {
-    mockPrisma.item.findUnique.mockResolvedValue(sampleItem);
     mockPrisma.item.delete.mockResolvedValue(sampleItem);
 
     const req = makeRequest("http://localhost:3000/api/items/test-id-1", {
       method: "DELETE",
     });
 
-    const res = await DELETE(req, makeParams("test-id-1"));
+    const res = (await DELETE(req, makeParams("test-id-1"))) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -232,13 +251,16 @@ describe("DELETE /api/items/:id", () => {
   });
 
   it("returns 404 when deleting nonexistent item", async () => {
-    mockPrisma.item.findUnique.mockResolvedValue(null);
+    mockAuthorizeItemRequest.mockResolvedValue({
+      item: null,
+      authorization: NextResponse.json({ error: "Item not found" }, { status: 404 }),
+    });
 
     const req = makeRequest("http://localhost:3000/api/items/nonexistent", {
       method: "DELETE",
     });
 
-    const res = await DELETE(req, makeParams("nonexistent"));
+    const res = (await DELETE(req, makeParams("nonexistent"))) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(404);
@@ -248,7 +270,10 @@ describe("DELETE /api/items/:id", () => {
 
   it("cleans up photo file when item has a photo", async () => {
     const itemWithPhoto = { ...sampleItem, photo: "/uploads/test.jpg" };
-    mockPrisma.item.findUnique.mockResolvedValue(itemWithPhoto);
+    mockAuthorizeItemRequest.mockResolvedValue({
+      item: itemWithPhoto,
+      authorization: null,
+    } as any);
     mockPrisma.item.delete.mockResolvedValue(itemWithPhoto);
 
     const req = makeRequest("http://localhost:3000/api/items/test-id-1", {
@@ -262,13 +287,10 @@ describe("DELETE /api/items/:id", () => {
   });
 
   it("returns 403 when owner edits someone else's item", async () => {
-    mockAuth.mockResolvedValue({
-      user: {
-        id: "user-2",
-        role: "owner",
-      },
+    mockAuthorizeItemRequest.mockResolvedValue({
+      item: null,
+      authorization: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
     });
-    mockPrisma.item.findUnique.mockResolvedValue(sampleItem);
 
     const req = makeRequest("http://localhost:3000/api/items/test-id-1", {
       method: "PUT",
@@ -276,7 +298,7 @@ describe("DELETE /api/items/:id", () => {
       body: JSON.stringify({ name: "Updated Item" }),
     });
 
-    const res = await PUT(req, makeParams("test-id-1"));
+    const res = (await PUT(req, makeParams("test-id-1"))) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(403);

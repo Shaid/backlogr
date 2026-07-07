@@ -38,8 +38,21 @@ jest.mock("@/lib/tags", () => ({
   resolveTagConnections: jest.fn().mockResolvedValue([]),
 }));
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { GET, POST } from "@/app/api/items/route";
+import { authorizeApiRequest } from "@/lib/authz";
+
+jest.mock("@/lib/authz", () => {
+  const actual = jest.requireActual("@/lib/authz");
+  return {
+    ...actual,
+    authorizeApiRequest: jest.fn(),
+  };
+});
+
+const mockAuthorizeApiRequest = authorizeApiRequest as jest.MockedFunction<
+  typeof authorizeApiRequest
+>;
 
 function makeRequest(url: string, init?: RequestInit) {
   return new NextRequest(new URL(url, "http://localhost:3000"), init as never);
@@ -82,6 +95,12 @@ beforeEach(() => {
       email: "editor@example.com",
     },
   });
+  mockAuthorizeApiRequest.mockResolvedValue({
+    id: "user-1",
+    role: "editor",
+    name: "Editor",
+    email: "editor@example.com",
+  } as any);
 });
 
 describe("GET /api/items", () => {
@@ -89,7 +108,7 @@ describe("GET /api/items", () => {
     mockPrisma.item.findMany.mockResolvedValue([sampleItem]);
 
     const req = makeRequest("http://localhost:3000/api/items");
-    const res = await GET(req);
+    const res = (await GET(req)) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -108,7 +127,7 @@ describe("GET /api/items", () => {
     mockPrisma.item.findMany.mockResolvedValue([sampleItem]);
 
     const req = makeRequest("http://localhost:3000/api/items?q=Test");
-    const res = await GET(req);
+    const res = (await GET(req)) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -124,7 +143,7 @@ describe("GET /api/items", () => {
     mockPrisma.item.findMany.mockResolvedValue([]);
 
     const req = makeRequest("http://localhost:3000/api/items?q=nonexistent");
-    const res = await GET(req);
+    const res = (await GET(req)) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -145,7 +164,7 @@ describe("POST /api/items", () => {
       body: JSON.stringify({ name: "Test Item" }),
     });
 
-    const res = await POST(req);
+    const res = (await POST(req)) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(201);
@@ -173,12 +192,11 @@ describe("POST /api/items", () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = (await POST(req)) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(201);
     expect(body.tags).toHaveLength(1);
-    // resolveTagConnections is mocked — verify it was called with the tags
     const { resolveTagConnections } = require("@/lib/tags");
     expect(resolveTagConnections).toHaveBeenCalledWith(["gadget"]);
   });
@@ -190,7 +208,7 @@ describe("POST /api/items", () => {
       body: JSON.stringify({ category: "Books" }),
     });
 
-    const res = await POST(req);
+    const res = (await POST(req)) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(400);
@@ -204,7 +222,7 @@ describe("POST /api/items", () => {
       body: JSON.stringify({ name: "" }),
     });
 
-    const res = await POST(req);
+    const res = (await POST(req)) as NextResponse;
     expect(res.status).toBe(400);
   });
 
@@ -240,16 +258,17 @@ describe("POST /api/items", () => {
 
     await POST(req);
 
-    // resolveTagConnections receives the raw array — it handles trimming internally
     const { resolveTagConnections } = require("@/lib/tags");
     expect(resolveTagConnections).toHaveBeenCalledWith(["  clean  ", "", "  "]);
   });
 
   it("returns 401 when unauthenticated", async () => {
-    mockAuth.mockResolvedValue(null);
+    mockAuthorizeApiRequest.mockResolvedValue(
+      NextResponse.json({ error: "Authentication required" }, { status: 401 }),
+    );
 
     const req = makeRequest("http://localhost:3000/api/items");
-    const res = await GET(req);
+    const res = (await GET(req)) as NextResponse;
     const body = await res.json();
 
     expect(res.status).toBe(401);
